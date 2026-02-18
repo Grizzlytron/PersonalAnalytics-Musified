@@ -129,6 +129,10 @@ app.whenReady().then(async () => {
       await trackers.registerTrackerCallback(TrackerType.DaysParticipatedTracker);
     }
 
+    if (studyConfig.trackers.museTracker.enabled) {
+      await trackers.registerTrackerCallback(TrackerType.MuseTracker);
+    }
+
     const settings: Settings = await Settings.findOneBy({ onlyOneEntityShouldExist: 1 });
     const isAutoLaunch = app.getLoginItemSettings().wasOpenedAtLogin || process.argv.includes('--hidden');
 

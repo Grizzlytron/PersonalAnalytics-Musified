@@ -9,6 +9,7 @@ import { UserInputEntity } from '../entities/UserInputEntity';
 import { Settings } from '../entities/Settings';
 import { UsageDataEntity } from '../entities/UsageDataEntity';
 import { WorkDayEntity } from '../entities/WorkDayEntity'
+import { MuseEntity } from '../entities/MuseEntity';
 
 const LOG = getMainLogger('DatabaseService');
 
@@ -33,7 +34,8 @@ export class DatabaseService {
       UsageDataEntity,
       UserInputEntity,
       WindowActivityEntity,
-      WorkDayEntity
+      WorkDayEntity,
+      MuseEntity
     ]
     
     let options: DataSourceOptions = {

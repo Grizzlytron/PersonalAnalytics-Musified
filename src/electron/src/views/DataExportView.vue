@@ -10,6 +10,7 @@ import { DataExportType } from '../../shared/DataExportType.enum';
 import WindowActivityDto from '../../shared/dto/WindowActivityDto';
 import UserInputDto from '../../shared/dto/UserInputDto';
 import DataExportExperienceSamplingTracker from '../components/DataExportExperienceSamplingTracker.vue';
+import DataExportMuseTracker from '../components/DataExportMuseTracker.vue';
 import ExperienceSamplingDto from '../../shared/dto/ExperienceSamplingDto';
 import getRendererLogger from '../utils/Logger';
 
@@ -32,6 +33,8 @@ const exportExperienceSamplesSelectedOption = ref<DataExportType>(DataExportType
 const exportWindowActivitySelectedOption = ref<DataExportType>(DataExportType.None);
 const exportUserInputSelectedOption = ref<DataExportType>(DataExportType.None);
 
+  const exportMuseSelectedOption = ref<boolean>(false);
+
 const obfuscationTermsInput = ref<string[]>();
 
 const isExporting = ref(false);
@@ -53,25 +56,44 @@ const currentNamedStep = computed(() => {
 });
 
 onMounted(async () => {
-  studyInfo.value = (await typedIpcRenderer.invoke('getStudyInfo')) as StudyInfoDto;
+  // Fire all IPC calls in parallel instead of sequentially
+  const promises: Promise<void>[] = [];
+
+  promises.push(
+    typedIpcRenderer.invoke('getStudyInfo').then((info: any) => {
+      studyInfo.value = info as StudyInfoDto;
+    })
+  );
+
   if (studyConfig.trackers.experienceSamplingTracker.enabled) {
     exportExperienceSamplesSelectedOption.value = DataExportType.All;
-    mostRecentExperienceSamples.value = await typedIpcRenderer.invoke(
-      'getMostRecentExperienceSamplingDtos',
-      20
+    promises.push(
+      typedIpcRenderer.invoke('getMostRecentExperienceSamplingDtos', 20).then((data: any) => {
+        mostRecentExperienceSamples.value = data;
+      })
     );
   }
   if (studyConfig.trackers.windowActivityTracker.enabled) {
     exportWindowActivitySelectedOption.value = DataExportType.All;
-    mostRecentWindowActivities.value = await typedIpcRenderer.invoke(
-      'getMostRecentWindowActivityDtos',
-      20
+    promises.push(
+      typedIpcRenderer.invoke('getMostRecentWindowActivityDtos', 20).then((data: any) => {
+        mostRecentWindowActivities.value = data;
+      })
     );
   }
   if (studyConfig.trackers.userInputTracker.enabled) {
     exportUserInputSelectedOption.value = DataExportType.All;
-    mostRecentUserInputs.value = await typedIpcRenderer.invoke('getMostRecentUserInputDtos', 20);
+    promises.push(
+      typedIpcRenderer.invoke('getMostRecentUserInputDtos', 20).then((data: any) => {
+        mostRecentUserInputs.value = data;
+      })
+    );
   }
+  if (studyConfig.trackers.museTracker.enabled) {
+    exportMuseSelectedOption.value = true;
+  }
+
+  await Promise.all(promises);
   isLoading.value = false;
 });
 
@@ -387,6 +409,10 @@ function revealItemInFolder(event: Event) {
               :data="mostRecentExperienceSamples"
               :default-value="exportExperienceSamplesSelectedOption"
               @change="handleExperienceSamplingConfigChanged"
+            />
+            <DataExportMuseTracker
+              v-if="studyConfig.trackers.museTracker.enabled"
+              v-model:should-share="exportMuseSelectedOption"
             />
           </div>
         </transition-group>

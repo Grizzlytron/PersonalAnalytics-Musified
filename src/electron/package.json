@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "prebuild": "npm --prefix PA.MuseTracker/typescript run build",
     "build": "vue-tsc --noEmit && vite build && electron-builder --config electron-builder.config.cjs",
     "build:mac": "npm run build:mac:arm64 && npm run build:mac:x64",
     "build:mac:arm64": "vue-tsc --noEmit && vite build && electron-builder --mac --arm64 --config electron-builder.config.cjs",
@@ -63,15 +64,20 @@
   },
   "dependencies": {
     "archiver": "^7.0.1",
+    "baseline-browser-mapping": "^2.9.11",
     "better-sqlite3": "^9.4.0",
     "better-sqlite3-multiple-ciphers": "^9.4.0",
+    "caniuse-lite": "^1.0.30001761",
+    "chart.js": "^4.5.1",
     "dompurify": "^3.3.1",
     "electron-log": "^5.1.1",
     "form-data": "^4.0.5",
     "jsdom": "^25.0.1",
+    "muse-tracker": "file:PA.MuseTracker/typescript",
     "node-schedule": "^2.1.1",
     "typeorm": "^0.3.28",
     "user-input-tracker": "file:PA.UserInputTracker/typescript",
+    "vue-chartjs": "^5.3.3",
     "vue-router": "^4.6.4",
     "windows-activity-tracker": "file:PA.WindowsActivityTracker/typescript"
   }

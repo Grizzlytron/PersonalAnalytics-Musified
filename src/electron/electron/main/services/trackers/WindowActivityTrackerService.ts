@@ -1,4 +1,4 @@
-import ActiveWindow from 'windows-activity-tracker/dist/types/ActiveWindow';
+import ActiveWindow from '../../../../PA.WindowsActivityTracker/typescript/dist/types/ActiveWindow'
 import { WindowActivityEntity } from '../../entities/WindowActivityEntity';
 import { In } from 'typeorm';
 import getMainLogger from '../../../config/Logger';

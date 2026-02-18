@@ -1,6 +1,6 @@
 import * as schedule from 'node-schedule';
 import { Tracker } from './Tracker';
-import { TrackerConfig } from '../../../types/StudyConfig';
+import { TrackerConfiguration } from '../../../../shared/StudyConfiguration';
 import { TrackerType } from '../../../enums/TrackerType.enum';
 import getMainLogger from '../../../config/Logger';
 import { ExperienceSamplingTracker } from './ExperienceSamplingTracker';
@@ -10,18 +10,20 @@ import { UserInputEntity } from '../../entities/UserInputEntity';
 import { MoreThanOrEqual } from 'typeorm';
 import { WorkScheduleService } from '../WorkScheduleService'
 import { DaysParticipatedTracker } from './DaysParticipatedTracker'
+import { MuseTracker } from './MuseTracker';
+import { MuseTrackerService } from './MuseTrackerService';
 
 const LOG = getMainLogger('TrackerService');
 
 export class TrackerService {
   private trackers: Tracker[] = [];
-  private readonly config: TrackerConfig;
+  private readonly config: TrackerConfiguration;
   private readonly windowService: WindowService;
   private readonly workScheduleService: WorkScheduleService;
   private checkIfUITIsWorkingJob: schedule.Job;
 
-  constructor(trackerConfig: TrackerConfig, windowService: WindowService, workScheduleService: WorkScheduleService) {
-    this.config = trackerConfig;
+  constructor(TrackerConfiguration: TrackerConfiguration, windowService: WindowService, workScheduleService: WorkScheduleService) {
+    this.config = TrackerConfiguration;
     this.windowService = windowService;
     this.workScheduleService = workScheduleService;
     LOG.debug(`TrackerService.constructor: config=${JSON.stringify(this.config)}`);
@@ -77,6 +79,12 @@ export class TrackerService {
     } else if (trackerType === TrackerType.DaysParticipatedTracker) {
       const daysParticipatedTracker = new DaysParticipatedTracker();
       this.trackers.push(daysParticipatedTracker);
+    } else if (
+      this.config.museTracker.enabled &&
+      trackerType === TrackerType.MuseTracker
+    ) {
+      const museTracker: MuseTracker = new MuseTracker();
+      this.trackers.push(museTracker);
     } else {
       throw new Error(`Tracker ${trackerType} not enabled or unsupported!`);
     }
@@ -141,6 +149,10 @@ export class TrackerService {
 
   public getRunningTrackerNames() {
     return this.trackers.filter((t: Tracker) => t.isRunning).map((t: Tracker) => t.name);
+  }
+
+  public getTracker(name: string): Tracker | undefined {
+    return this.trackers.find((t: Tracker) => t.name === name);
   }
 
   public isAnyTrackerRunning() {

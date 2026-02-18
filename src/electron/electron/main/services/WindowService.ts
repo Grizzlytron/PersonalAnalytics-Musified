@@ -21,6 +21,7 @@ export class WindowService {
   private onboardingWindow: BrowserWindow
   private dataExportWindow: BrowserWindow
   private settingsWindow: BrowserWindow
+  private MuseWindow: BrowserWindow
 
   private hasOpenedDataExportUrl: boolean = false;
   private hasRevealedDataEportFolder: boolean = false;
@@ -235,6 +236,56 @@ export class WindowService {
     }
   }
 
+  public closeMuseWindow() {
+    if (this.MuseWindow) {
+      this.MuseWindow?.close()
+      this.MuseWindow = null
+    }
+  }
+
+  public async createMuseWindow(goToStep?: string) {
+    this.closeMuseWindow()
+
+    const __filename = fileURLToPath(import.meta.url)
+    const __dirname = dirname(__filename)
+    const preload = join(__dirname, '../preload/index.mjs')
+    this.MuseWindow = new BrowserWindow({
+      width: 800,
+      height: 850,
+      show: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      resizable: true,
+      title: 'PersonalAnalytics: Muse Tracking',
+      webPreferences: {
+        preload
+      }
+    })
+
+    if (process.env.VITE_DEV_SERVER_URL) {
+      await this.MuseWindow.loadURL(
+        process.env.VITE_DEV_SERVER_URL +
+        `#muse?isMacOS=${is.macOS}&goToStep=${goToStep ?? 'welcome'}`
+      )
+    } else {
+      await this.MuseWindow.loadFile(path.join(process.env.DIST, 'index.html'), {
+        hash: `muse?isMacOS=${is.macOS}&goToStep=${goToStep ?? 'welcome'}`
+      })
+    }
+
+    this.MuseWindow.webContents.setWindowOpenHandler((details) => {
+      shell.openExternal(details.url)
+      return { action: 'deny' }
+    })
+
+    this.MuseWindow.show()
+
+    this.MuseWindow.on('close', () => {
+      this.MuseWindow = null
+    })
+  }
+
   public async createDataExportWindow() {
     this.destroyDataExportWindow()
 
@@ -399,6 +450,10 @@ export class WindowService {
         label: 'Open Onboarding',
         click: () => this.createOnboardingWindow(),
         visible: is.dev
+      },
+      {
+        label: 'Open Muse Interface',
+        click: () => this.createMuseWindow(),
       },
       {
         label: 'Open Study Data Export',

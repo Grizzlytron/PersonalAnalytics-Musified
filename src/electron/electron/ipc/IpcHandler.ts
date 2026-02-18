@@ -21,8 +21,8 @@ import ExperienceSamplingDto from '../../shared/dto/ExperienceSamplingDto';
 import { is } from '../main/services/utils/helpers';
 import { JSDOM } from 'jsdom';
 import DOMPurify from 'dompurify';
-import { WorkScheduleService } from 'electron/main/services/WorkScheduleService'
-import { WorkHoursDto } from 'shared/dto/WorkHoursDto'
+import { WorkScheduleService } from 'electron/main/services/WorkScheduleService';
+import { WorkHoursDto } from 'shared/dto/WorkHoursDto';
 import { MuseEntity } from '../main/entities/MuseEntity';
 import path from 'path';
 
@@ -142,7 +142,7 @@ export class IpcHandler {
   private closeDataExportWindow(): void {
     this.windowService.closeDataExportWindow();
   }
-  
+
   private async getWorkHours(): Promise<WorkHoursDto> {
     return this.workScheduleService.getWorkSchedule();
   }
@@ -235,14 +235,15 @@ export class IpcHandler {
   private async revealItemInFolder(path: string): Promise<void> {
     this.windowService.showItemInFolder(path);
   }
-  
+
   private async openUploadUrl(): Promise<void> {
     this.windowService.openExternal();
   }
 
   private async showDataExportError(errorMessage?: string): Promise<void> {
-    const message = `Please try again. If the export keeps failing, contact the study team (${studyConfig.contactName}, ${studyConfig.contactEmail}) and send them a screenshot of this error.` 
-                      + (errorMessage ? `\n\nError message: ${errorMessage}` : '');
+    const message =
+      `Please try again. If the export keeps failing, contact the study team (${studyConfig.contactName}, ${studyConfig.contactEmail}) and send them a screenshot of this error.` +
+      (errorMessage ? `\n\nError message: ${errorMessage}` : '');
     dialog.showErrorBox('Study Data Export failed', message);
   }
 
@@ -275,14 +276,14 @@ export class IpcHandler {
       const runningTrackers = this.trackerService.getRunningTrackerNames();
       const isMuseRunning = runningTrackers.includes('MuseTracker');
       const tracker = this.trackerService.getTracker('MuseTracker') as any;
-      
+
       // Get latest data (limit to 50 for performance)
       const museService = new MuseTrackerService();
       const latestData = await museService.getMostRecentMuseData(50);
-      
+
       // Get total count efficiently
       const totalDataPoints = await MuseEntity.count();
-      
+
       // Get connected device (single device) using live tracker state when available
       let connectedDevice = null;
       const isConnected = !!tracker?.isDeviceConnected?.();
@@ -291,7 +292,10 @@ export class IpcHandler {
         const connectedInfo = tracker?.getConnectedDevice?.();
         const liveBattery = tracker?.getBatteryLevel?.();
         // Prefer live battery, but also accept 0 as valid (fully discharged), fall back to DB if undefined/null
-        const batteryLevel = liveBattery !== undefined && liveBattery !== null ? liveBattery : (latestRecord?.batteryLevel ?? 0);
+        const batteryLevel =
+          liveBattery !== undefined && liveBattery !== null
+            ? liveBattery
+            : (latestRecord?.batteryLevel ?? 0);
         const liveHeartRate = tracker?.getHeartRate?.() ?? 0;
         connectedDevice = {
           name: connectedInfo?.name || latestRecord?.deviceName || 'Unknown',
@@ -300,7 +304,7 @@ export class IpcHandler {
           heartRate: liveHeartRate
         };
       }
-      
+
       // Calculate average signal quality — only meaningful when a device is connected
       let avgQuality = 0;
       if (connectedDevice && latestData.length > 0) {
@@ -311,7 +315,7 @@ export class IpcHandler {
       return {
         isRunning: isMuseRunning,
         connectedDevice: connectedDevice,
-        latestData: latestData.map(d => ({
+        latestData: latestData.map((d) => ({
           id: d.id,
           deviceId: d.deviceId,
           deviceName: d.deviceName,
@@ -365,8 +369,8 @@ export class IpcHandler {
       const allData = await MuseEntity.find({
         order: { timestamp: 'ASC' }
       });
-      
-      return allData.map(d => ({
+
+      return allData.map((d) => ({
         id: d.id,
         deviceId: d.deviceId,
         deviceName: d.deviceName,

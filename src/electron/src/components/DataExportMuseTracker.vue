@@ -1,7 +1,7 @@
 <template>
   <div class="p-4">
-    <h3 class="text-lg font-semibold mb-4">Muse Tracker Data</h3>
-    
+    <h3 class="mb-4 text-lg font-semibold">Muse Tracker Data</h3>
+
     <div class="form-control mb-4">
       <label class="label cursor-pointer">
         <span class="label-text">Share Muse Data</span>
@@ -26,11 +26,9 @@
       >
         <p class="bg-slate-800 p-5 text-lg text-white">This data is not being shared</p>
       </div>
-      
+
       <div class="mb-4">
-        <p class="text-sm text-base-content/60 mb-2">
-          Total Data Points: {{ totalDataPoints }}
-        </p>
+        <p class="mb-2 text-sm text-base-content/60">Total Data Points: {{ totalDataPoints }}</p>
       </div>
 
       <div class="max-h-96 w-full overflow-y-auto">
@@ -48,11 +46,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="(row, index) in displayedData"
-              :key="index"
-              class="hover"
-            >
+            <tr v-for="(row, index) in displayedData" :key="index" class="hover">
               <td class="text-xs">{{ formatTimestamp(row.timestamp) }}</td>
               <td class="text-xs">{{ row.deviceName }}</td>
               <td class="text-xs">{{ formatNumber(row.channel1_TP9) }}</td>
@@ -82,8 +76,8 @@
       </div>
     </div>
 
-    <div class="mt-4 p-4 bg-base-100 rounded-lg">
-      <h4 class="font-semibold text-sm mb-2">Data Summary</h4>
+    <div class="mt-4 rounded-lg bg-base-100 p-4">
+      <h4 class="mb-2 text-sm font-semibold">Data Summary</h4>
       <div class="grid grid-cols-2 gap-2 text-sm">
         <div>
           <span class="text-base-content/60">Connected Devices:</span>
@@ -126,9 +120,7 @@ const emit = defineEmits<{
   'update:shouldShare': [value: boolean];
 }>();
 
-const selectedOption = ref(
-  props.shouldShare ? DataExportType.All : DataExportType.None
-);
+const selectedOption = ref(props.shouldShare ? DataExportType.All : DataExportType.None);
 const data = ref<MuseData[]>([]);
 const maxDisplayed = ref(100);
 
@@ -145,13 +137,15 @@ const totalDataPoints = computed(() => {
 });
 
 const uniqueDevices = computed(() => {
-  const devices = new Set(data.value.map(d => d.deviceId));
+  const devices = new Set(data.value.map((d) => d.deviceId));
   return devices.size;
 });
 
 const dateRange = computed(() => {
   if (data.value.length === 0) return 'No data';
-  const sorted = [...data.value].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const sorted = [...data.value].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
   const start = formatTimestamp(sorted[0].timestamp);
   const end = formatTimestamp(sorted[sorted.length - 1].timestamp);
   return `${start} - ${end}`;
@@ -170,7 +164,8 @@ async function loadData() {
 }
 
 function toggleDataSelection() {
-  selectedOption.value = selectedOption.value === DataExportType.None ? DataExportType.All : DataExportType.None;
+  selectedOption.value =
+    selectedOption.value === DataExportType.None ? DataExportType.All : DataExportType.None;
   emit('update:shouldShare', selectedOption.value === DataExportType.All);
 }
 

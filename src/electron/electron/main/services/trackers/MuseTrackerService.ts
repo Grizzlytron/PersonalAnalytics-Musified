@@ -22,7 +22,7 @@ export class MuseTrackerService {
   public static async handleMuseData(data: MuseData): Promise<void> {
     try {
       LOG.debug(`Saving Muse data from device: ${data.deviceId}`);
-      
+
       const entity = await MuseEntity.save({
         deviceId: data.deviceId,
         deviceName: data.deviceName,
@@ -76,10 +76,13 @@ export class MuseTrackerService {
     }
   }
 
-  public async getAverageSignalQuality(deviceId: string, timeWindowMs: number = 60000): Promise<number> {
+  public async getAverageSignalQuality(
+    deviceId: string,
+    timeWindowMs: number = 60000
+  ): Promise<number> {
     try {
       const timeThreshold = new Date(Date.now() - timeWindowMs);
-      
+
       const result = await MuseEntity.createQueryBuilder('muse')
         .select('AVG(muse.signalQuality)', 'avgQuality')
         .where('muse.deviceId = :deviceId AND muse.timestamp > :timeThreshold', {

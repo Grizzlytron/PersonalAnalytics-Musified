@@ -21,7 +21,7 @@ const promptedAtString = new Intl.DateTimeFormat(language, {
   hour: '2-digit',
   minute: '2-digit',
   hour12: false,
-  hourCycle: 'h23',
+  hourCycle: 'h23'
 }).format(promptedAt);
 
 const sampleLoadingValue = ref<number | null>();
@@ -101,7 +101,7 @@ async function skipExperienceSample() {
           </div>
         </div>
       </div>
-      <div class="flex cursor-pointer border-l border-gray-200 self-stretch">
+      <div class="flex cursor-pointer self-stretch border-l border-gray-200">
         <div
           class="flex w-full items-center justify-center rounded-none border border-transparent px-4 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:outline-none"
           @click="skipExperienceSample()"

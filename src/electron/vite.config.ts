@@ -9,13 +9,13 @@ import pkg from './package.json';
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
   fs.rmSync('dist-electron', { recursive: true, force: true });
-      
+
   const isServe = command === 'serve';
   const isBuild = command === 'build';
   const sourcemap = isServe || !!process.env.VSCODE_DEBUG;
 
   return {
-    plugins: [   
+    plugins: [
       vue(),
       electron({
         main: {
@@ -55,16 +55,16 @@ export default defineConfig(({ command }) => {
     ],
     css: {
       preprocessorOptions: {
-        less: {},
+        less: {}
       },
       postcss: {
-        plugins: [tailwindcss(), autoprefixer()],
-      } as any,
+        plugins: [tailwindcss(), autoprefixer()]
+      } as any
     },
     resolve: {
       alias: {
-        '@': new URL('./src', import.meta.url).pathname,
-      },
+        '@': new URL('./src', import.meta.url).pathname
+      }
     },
     clearScreen: false
   };

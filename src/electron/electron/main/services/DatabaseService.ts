@@ -8,7 +8,7 @@ import { ExperienceSamplingResponseEntity } from '../entities/ExperienceSampling
 import { UserInputEntity } from '../entities/UserInputEntity';
 import { Settings } from '../entities/Settings';
 import { UsageDataEntity } from '../entities/UsageDataEntity';
-import { WorkDayEntity } from '../entities/WorkDayEntity'
+import { WorkDayEntity } from '../entities/WorkDayEntity';
 import { MuseEntity } from '../entities/MuseEntity';
 
 const LOG = getMainLogger('DatabaseService');
@@ -26,7 +26,7 @@ export class DatabaseService {
     }
     LOG.info('Using database path:', this.dbPath);
   }
-  
+
   public async init(): Promise<void> {
     let entities: any = [
       ExperienceSamplingResponseEntity,
@@ -36,16 +36,16 @@ export class DatabaseService {
       WindowActivityEntity,
       WorkDayEntity,
       MuseEntity
-    ]
-    
+    ];
+
     let options: DataSourceOptions = {
       type: 'better-sqlite3',
       database: this.dbPath,
       synchronize: true,
       logging: false,
-      entities: entities,
+      entities: entities
     };
-    
+
     this.dataSource = new DataSource(options);
 
     try {

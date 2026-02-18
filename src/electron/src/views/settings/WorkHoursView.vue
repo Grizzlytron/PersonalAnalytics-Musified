@@ -1,11 +1,10 @@
 <script setup lang="ts">
-
-import { onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue';
 // import { useRoute } from 'vue-router'
-import WorkHoursRow from '../../components/WorkHoursRow.vue'
-import typedIpcRenderer from '../../utils/typedIpcRenderer'
-import {WorkHoursDayDto, WorkHoursDto} from '../../../shared/dto/WorkHoursDto'
-import Switch from '../../components/Switch.vue'
+import WorkHoursRow from '../../components/WorkHoursRow.vue';
+import typedIpcRenderer from '../../utils/typedIpcRenderer';
+import { WorkHoursDayDto, WorkHoursDto } from '../../../shared/dto/WorkHoursDto';
+import Switch from '../../components/Switch.vue';
 import StudyInfoDto from '../../../shared/dto/StudyInfoDto';
 
 let workHoursRef = ref<WorkHoursDto>({
@@ -15,29 +14,29 @@ let workHoursRef = ref<WorkHoursDto>({
   thursday: { startTime: '', endTime: '', isWorking: false },
   friday: { startTime: '', endTime: '', isWorking: false },
   saturday: { startTime: '', endTime: '', isWorking: false },
-  sunday: { startTime: '', endTime: '', isWorking: false },
+  sunday: { startTime: '', endTime: '', isWorking: false }
 });
 
 const isEnabled = ref(true);
 
-onMounted(async () => {        
+onMounted(async () => {
   try {
-    const workHours = await typedIpcRenderer.invoke('getWorkHours') as WorkHoursDto
-    workHoursRef.value = { ...workHours }
-    const settings = await typedIpcRenderer.invoke('getSettings') as StudyInfoDto;
+    const workHours = (await typedIpcRenderer.invoke('getWorkHours')) as WorkHoursDto;
+    workHoursRef.value = { ...workHours };
+    const settings = (await typedIpcRenderer.invoke('getSettings')) as StudyInfoDto;
     isEnabled.value = settings.enabledWorkHours;
   } catch (error) {
-    console.error('Error getting work hours:', error)
+    console.error('Error getting work hours:', error);
   }
-})
+});
 
 const updateWorkHours = async (day: keyof WorkHoursDto, updatedWorkHours: WorkHoursDayDto) => {
   workHoursRef.value[day] = updatedWorkHours;
   try {
     const serializableWorkHours = JSON.parse(JSON.stringify(workHoursRef.value));
-    await typedIpcRenderer.invoke('setWorkHours', serializableWorkHours )
+    await typedIpcRenderer.invoke('setWorkHours', serializableWorkHours);
   } catch (error) {
-    console.error('Error setting work hours:', error)
+    console.error('Error setting work hours:', error);
   }
 };
 
@@ -45,36 +44,41 @@ const onChangeWorkHoursIsEnabled = async (e: Event) => {
   const isChecked = (e.target as HTMLInputElement).checked;
   isEnabled.value = isChecked;
   try {
-    await typedIpcRenderer.invoke('setSettingsProp', 'enabledWorkHours', isChecked)
+    await typedIpcRenderer.invoke('setSettingsProp', 'enabledWorkHours', isChecked);
   } catch (error) {
-    console.error('Error setting work hours enabled:', error)
+    console.error('Error setting work hours enabled:', error);
   }
 };
-
 </script>
 
 <template>
   <div>
-    <article class="prose prose-lg mt-4 mb-5">
+    <article class="prose prose-lg mb-5 mt-4">
       <h1>
         <span class="primary-blue">Active Times</span>
       </h1>
       <span>
-        Define your active times for each day of the week, such as the time you usually work or study.
+        Define your active times for each day of the week, such as the time you usually work or
+        study.
       </span>
-      <span v-if="isEnabled">
-        Outside these times, no self-reflection pop-up is shown.
-      </span>
+      <span v-if="isEnabled"> Outside these times, no self-reflection pop-up is shown. </span>
     </article>
 
-    <Switch :modelValue="isEnabled" :label="'Enable/disable active work hours'" :on-change="onChangeWorkHoursIsEnabled" />
+    <Switch
+      :modelValue="isEnabled"
+      :label="'Enable/disable active work hours'"
+      :on-change="onChangeWorkHoursIsEnabled"
+    />
 
     <div v-if="isEnabled" class="work-hours-container">
       <div v-for="(workHoursDay, day) in workHoursRef" :key="day">
-        <work-hours-row :day="day" :pre-set-work-hours="workHoursDay!" :set-work-hours="updateWorkHours" />
+        <work-hours-row
+          :day="day"
+          :pre-set-work-hours="workHoursDay!"
+          :set-work-hours="updateWorkHours"
+        />
       </div>
     </div>
-
   </div>
 </template>
 

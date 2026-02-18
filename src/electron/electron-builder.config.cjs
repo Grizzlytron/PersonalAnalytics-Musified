@@ -6,17 +6,13 @@ module.exports = {
   directories: {
     output: 'release/${version}'
   },
-  files: [
-    'dist',
-    'dist-electron',
-    '!node_modules/uiohook-napi/build/**'
-  ],
+  files: ['dist', 'dist-electron', '!node_modules/uiohook-napi/build/**'],
   publish: {
     provider: 'github',
     owner: 'Grizzlytron',
     repo: 'PersonalAnalytics'
   },
-  afterSign: "scripts/notarize.cjs",
+  afterSign: 'scripts/notarize.cjs',
   mac: {
     artifactName: '${productName}-${version}-${arch}.${ext}',
     asarUnpack: ['node_modules/**/*.node'],
@@ -44,19 +40,19 @@ module.exports = {
     writeUpdateInfo: false
   },
   win: {
-    target: ["nsis"],
+    target: ['nsis'],
     verifyUpdateCodeSignature: false,
     azureSignOptions: {
       publisherName: `${process.env.AZURE_PUBLISHER_NAME}`,
       endpoint: `${process.env.AZURE_ENDPOINT}`,
       codeSigningAccountName: `${process.env.AZURE_CODE_SIGNING_NAME}`,
-      certificateProfileName: `${process.env.AZURE_CERT_PROFILE_NAME}`,
-    },
+      certificateProfileName: `${process.env.AZURE_CERT_PROFILE_NAME}`
+    }
   },
   nsis: {
     oneClick: true,
     deleteAppDataOnUninstall: true,
     differentialPackage: false,
-    artifactName: '${productName}-${version}-Windows.${ext}',
+    artifactName: '${productName}-${version}-Windows.${ext}'
   }
 };

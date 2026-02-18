@@ -8,8 +8,8 @@ import { WindowService } from '../WindowService';
 import studyConfig from '../../../../shared/study.config';
 import { UserInputEntity } from '../../entities/UserInputEntity';
 import { MoreThanOrEqual } from 'typeorm';
-import { WorkScheduleService } from '../WorkScheduleService'
-import { DaysParticipatedTracker } from './DaysParticipatedTracker'
+import { WorkScheduleService } from '../WorkScheduleService';
+import { DaysParticipatedTracker } from './DaysParticipatedTracker';
 import { MuseTracker } from './MuseTracker';
 import { MuseTrackerService } from './MuseTrackerService';
 
@@ -22,7 +22,11 @@ export class TrackerService {
   private readonly workScheduleService: WorkScheduleService;
   private checkIfUITIsWorkingJob: schedule.Job;
 
-  constructor(TrackerConfiguration: TrackerConfiguration, windowService: WindowService, workScheduleService: WorkScheduleService) {
+  constructor(
+    TrackerConfiguration: TrackerConfiguration,
+    windowService: WindowService,
+    workScheduleService: WorkScheduleService
+  ) {
     this.config = TrackerConfiguration;
     this.windowService = windowService;
     this.workScheduleService = workScheduleService;
@@ -79,10 +83,7 @@ export class TrackerService {
     } else if (trackerType === TrackerType.DaysParticipatedTracker) {
       const daysParticipatedTracker = new DaysParticipatedTracker();
       this.trackers.push(daysParticipatedTracker);
-    } else if (
-      this.config.museTracker.enabled &&
-      trackerType === TrackerType.MuseTracker
-    ) {
+    } else if (this.config.museTracker.enabled && trackerType === TrackerType.MuseTracker) {
       const museTracker: MuseTracker = new MuseTracker();
       this.trackers.push(museTracker);
     } else {

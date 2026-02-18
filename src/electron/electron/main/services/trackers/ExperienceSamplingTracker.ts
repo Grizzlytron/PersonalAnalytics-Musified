@@ -4,8 +4,8 @@ import { Tracker } from './Tracker';
 import getMainLogger from '../../../config/Logger';
 import { Settings } from '../../entities/Settings';
 import { powerMonitor } from 'electron';
-import { WorkScheduleService } from '../WorkScheduleService'
-import studyConfig from '../../../../shared/study.config'
+import { WorkScheduleService } from '../WorkScheduleService';
+import studyConfig from '../../../../shared/study.config';
 import { DataSource } from 'typeorm';
 
 const LOG = getMainLogger('ExperienceSamplingTracker');
@@ -21,7 +21,12 @@ export class ExperienceSamplingTracker implements Tracker {
   public readonly name: string = 'ExperienceSamplingTracker';
   public isRunning: boolean = false;
 
-  constructor(windowService: WindowService, workScheduleService: WorkScheduleService, intervalInMs: number, samplingRandomization: number) {
+  constructor(
+    windowService: WindowService,
+    workScheduleService: WorkScheduleService,
+    intervalInMs: number,
+    samplingRandomization: number
+  ) {
     this.windowService = windowService;
     this.workScheduleService = workScheduleService;
     this.intervalInMs = intervalInMs;
@@ -34,7 +39,8 @@ export class ExperienceSamplingTracker implements Tracker {
   }
 
   private async getEffectiveIntervalMs(): Promise<number> {
-    const allowChange = (studyConfig.trackers.experienceSamplingTracker.allowUserToChangeInterval ?? true) === true;
+    const allowChange =
+      (studyConfig.trackers.experienceSamplingTracker.allowUserToChangeInterval ?? true) === true;
     if (allowChange) {
       const settings: Settings = await Settings.findOneBy({ onlyOneEntityShouldExist: 1 });
       const h = settings?.userDefinedExperienceSamplingInterval_h;
@@ -91,7 +97,7 @@ export class ExperienceSamplingTracker implements Tracker {
   private async handleExperienceSamplingJob(fireDate: Date): Promise<void> {
     LOG.info(`Experience Sampling Job was supposed to fire at ${fireDate}, fired at ${new Date()}`);
 
-     const disabled = await this.isUserDisabled();
+    const disabled = await this.isUserDisabled();
     if (disabled) {
       LOG.info('Experience sampling is disabled by user; not opening popup.');
       await this.scheduleNextJob();
@@ -100,12 +106,12 @@ export class ExperienceSamplingTracker implements Tracker {
 
     // check if we can safely fire the experience sampling job
     // or have to consider work hours based on user settings and time/weekday
-    const settings: Settings = await Settings.findOneBy({ onlyOneEntityShouldExist: 1 });  
+    const settings: Settings = await Settings.findOneBy({ onlyOneEntityShouldExist: 1 });
     const userConsiderWorkHours = settings.enabledWorkHours;
     const inWorkHours = await this.workScheduleService.currentlyWithinWorkHours();
     const considerWorkHours = studyConfig.trackers.experienceSamplingTracker.enabledWorkHours;
     if (userConsiderWorkHours && considerWorkHours && !inWorkHours) {
-        LOG.info('Currently outside of work hours, abort firing');
+      LOG.info('Currently outside of work hours, abort firing');
     } else {
       // within work hours; start experience sampling
       await this.windowService.createExperienceSamplingWindow();

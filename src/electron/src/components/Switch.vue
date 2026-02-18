@@ -9,7 +9,6 @@
 </template>
 
 <script setup lang="ts">
-
 const props = defineProps<{
   modelValue: boolean;
   label: string;
@@ -19,11 +18,9 @@ const props = defineProps<{
 const onChange = (event: Event) => {
   props.onChange(event);
 };
-
 </script>
 
 <style scoped>
-
 .switch-container {
   display: flex;
   align-items: center;
@@ -68,7 +65,7 @@ const onChange = (event: Event) => {
 }
 
 input:checked + .slider {
-  background-color: #2196F3;
+  background-color: #2196f3;
 }
 
 input:checked + .slider:before {

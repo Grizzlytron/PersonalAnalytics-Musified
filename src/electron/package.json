@@ -1,7 +1,7 @@
 {
   "name": "personal-analytics",
-  "description": "PersonalAnalytics is a privacy-protecting, open-source self-monitoring software",
-  "version": "0.0.51",
+  "description": "PersonalAnalytics (Muse) is a privacy-protecting, open-source self-monitoring software extended with biometric data collection",
+  "version": "0.1.0",
   "main": "dist-electron/main/index.js",
   "type": "module",
   "author": {

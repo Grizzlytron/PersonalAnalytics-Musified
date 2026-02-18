@@ -76,7 +76,7 @@ export class MuseTracker implements Tracker {
   private currentDeviceName: string | null = null;
   private isConnected: boolean = false;
   private nativeAvailable: boolean = false;
-  
+
   // Data aggregation buffers
   private eegBuffer: DataPacket[] = [];
   private ppgBuffer: DataPacket[] = [];
@@ -88,10 +88,10 @@ export class MuseTracker implements Tracker {
   private lastHsiValues: number[] = [4, 4, 4, 4]; // Default: poor fit (no head)
 
   // Heart rate calculation from raw Optics/PPG stream
-  private ppgRawSamples: number[] = [];           // Ring buffer of raw optics values at ~64 Hz
-  private readonly PPG_SAMPLE_RATE = 64;           // Muse S Optics sampling rate in Hz
-  private readonly PPG_BUFFER_SECONDS = 10;        // Keep 10 seconds of data
-  private readonly PPG_BUFFER_SIZE = 64 * 10;      // 640 samples
+  private ppgRawSamples: number[] = []; // Ring buffer of raw optics values at ~64 Hz
+  private readonly PPG_SAMPLE_RATE = 64; // Muse S Optics sampling rate in Hz
+  private readonly PPG_BUFFER_SECONDS = 10; // Keep 10 seconds of data
+  private readonly PPG_BUFFER_SIZE = 64 * 10; // 640 samples
   private currentHeartRate: number = 0;
 
   // PRESET_1035: 4CH EEG 14bit@256Hz + 4CH Optics@64Hz low-power + accel/gyro@52Hz + battery@1Hz
@@ -125,20 +125,22 @@ export class MuseTracker implements Tracker {
 
     // Device discovery
     this.museCore.on('deviceDiscovered', (device: MuseDevice) => {
-      LOG.info(`Discovered Muse device: ${device.name} (${device.macAddress}), Signal Strength (RSSI): ${device.rssi} dBm`);
+      LOG.info(
+        `Discovered Muse device: ${device.name} (${device.macAddress}), Signal Strength (RSSI): ${device.rssi} dBm`
+      );
     });
 
     // Connection state changes
     this.museCore.on('connectionStateChanged', (packet: ConnectionPacket) => {
       const stateName = this.getConnectionStateName(packet.currentState);
       LOG.info(`Connection state changed to: ${stateName} for ${packet.museName}`);
-      
+
       if (packet.currentState === ConnectionState.CONNECTED) {
         this.isConnected = true;
         this.currentDeviceId = packet.macAddress;
         this.currentDeviceName = packet.museName;
         LOG.info(`Successfully connected to ${packet.museName}`);
-        
+
         // Set battery-optimized preset (PRESET_1035: EEG + low-power Optics)
         try {
           this.museCore.setPreset(this.MUSE_2025_PRESET);
@@ -146,7 +148,7 @@ export class MuseTracker implements Tracker {
         } catch (err) {
           LOG.warn('Failed to set preset (device may reconnect with default)', err);
         }
-        
+
         // Start streaming data (only EEG, Optics, Battery — no accel/gyro)
         try {
           this.museCore.startStreaming();
@@ -230,13 +232,20 @@ export class MuseTracker implements Tracker {
 
   private getConnectionStateName(state: number): string {
     switch (state) {
-      case ConnectionState.UNKNOWN: return 'UNKNOWN';
-      case ConnectionState.CONNECTED: return 'CONNECTED';
-      case ConnectionState.CONNECTING: return 'CONNECTING';
-      case ConnectionState.DISCONNECTED: return 'DISCONNECTED';
-      case ConnectionState.NEEDS_UPDATE: return 'NEEDS_UPDATE';
-      case ConnectionState.NEEDS_LICENSE: return 'NEEDS_LICENSE';
-      default: return `UNKNOWN(${state})`;
+      case ConnectionState.UNKNOWN:
+        return 'UNKNOWN';
+      case ConnectionState.CONNECTED:
+        return 'CONNECTED';
+      case ConnectionState.CONNECTING:
+        return 'CONNECTING';
+      case ConnectionState.DISCONNECTED:
+        return 'DISCONNECTED';
+      case ConnectionState.NEEDS_UPDATE:
+        return 'NEEDS_UPDATE';
+      case ConnectionState.NEEDS_LICENSE:
+        return 'NEEDS_LICENSE';
+      default:
+        return `UNKNOWN(${state})`;
     }
   }
 
@@ -248,7 +257,7 @@ export class MuseTracker implements Tracker {
 
     try {
       LOG.info(`Starting ${this.name}...`);
-      
+
       // Load native module on first start (deferred from constructor)
       this.ensureNativeLoaded();
 
@@ -260,12 +269,12 @@ export class MuseTracker implements Tracker {
       } else {
         LOG.warn('Native module not available, running in stub mode');
       }
-      
+
       // Start aggregation timer
       this.aggregationTimer = setInterval(() => {
         this.aggregateAndSave();
       }, this.collectingInterval);
-      
+
       this.isRunning = true;
       LOG.info(`${this.name} started successfully`);
     } catch (error) {
@@ -290,21 +299,21 @@ export class MuseTracker implements Tracker {
 
     try {
       LOG.info(`Stopping ${this.name}...`);
-      
+
       // Stop aggregation timer
       if (this.aggregationTimer) {
         clearInterval(this.aggregationTimer);
         this.aggregationTimer = null;
       }
-      
+
       // Final aggregation
       await this.aggregateAndSave();
-      
+
       // Stop the core tracker
       if (this.nativeAvailable && this.museCore) {
         this.museCore.stop();
       }
-      
+
       this.isRunning = false;
       LOG.info(`${this.name} stopped successfully`);
     } catch (error) {
@@ -319,19 +328,19 @@ export class MuseTracker implements Tracker {
     if (!this.nativeAvailable || !this.museCore) {
       throw new Error('Native module not available');
     }
-    
+
     try {
       LOG.info(`Attempting to connect to device: ${macAddress}`);
-      
+
       // Check if device was discovered
       const devices = this.museCore.getDiscoveredDevices();
       LOG.debug(`Available devices for connection: ${JSON.stringify(devices)}`);
-      
+
       const deviceFound = devices.find((d: MuseDevice) => d.macAddress === macAddress);
       if (!deviceFound) {
         LOG.warn(`Device ${macAddress} not found in discovered devices`);
       }
-      
+
       await this.museCore.connect(macAddress);
       LOG.info(`Connect request sent to device: ${macAddress}`);
     } catch (error) {
@@ -347,7 +356,7 @@ export class MuseTracker implements Tracker {
     if (!this.nativeAvailable || !this.museCore) {
       return;
     }
-    
+
     try {
       LOG.info('Disconnecting from device...');
       this.museCore.disconnect();
@@ -453,7 +462,7 @@ export class MuseTracker implements Tracker {
         smoothed[i] > smoothed[i - 2] &&
         smoothed[i] > smoothed[i + 2]
       ) {
-        if (peaks.length === 0 || (i - peaks[peaks.length - 1]) >= minPeakDistance) {
+        if (peaks.length === 0 || i - peaks[peaks.length - 1] >= minPeakDistance) {
           peaks.push(i);
         }
       }
@@ -470,7 +479,7 @@ export class MuseTracker implements Tracker {
     // Remove outlier intervals (> 2x or < 0.5x median)
     intervals.sort((a, b) => a - b);
     const median = intervals[Math.floor(intervals.length / 2)];
-    const filtered = intervals.filter(iv => iv >= median * 0.5 && iv <= median * 2.0);
+    const filtered = intervals.filter((iv) => iv >= median * 0.5 && iv <= median * 2.0);
     if (filtered.length === 0) return 0;
 
     const avgInterval = filtered.reduce((a, b) => a + b, 0) / filtered.length;
@@ -513,7 +522,7 @@ export class MuseTracker implements Tracker {
     LOG.info('Tracker running:', this.isRunning);
     LOG.info('Device connected:', this.isConnected);
     LOG.info('Current device:', this.currentDeviceName || 'None');
-    
+
     if (this.nativeAvailable && this.museCore) {
       try {
         LOG.info('\n--- Running MuseTrackerCore diagnostics ---');
@@ -523,7 +532,7 @@ export class MuseTracker implements Tracker {
         LOG.error('✗ Core diagnostics failed:', err);
       }
     }
-    
+
     LOG.info('===========================================\n');
   }
 
@@ -537,9 +546,12 @@ export class MuseTracker implements Tracker {
 
     try {
       const now = new Date();
-      
+
       // Calculate average EEG values
-      let avgTP9 = 0, avgAF7 = 0, avgAF8 = 0, avgTP10 = 0;
+      let avgTP9 = 0,
+        avgAF7 = 0,
+        avgAF8 = 0,
+        avgTP10 = 0;
       if (this.eegBuffer.length > 0) {
         for (const packet of this.eegBuffer) {
           if (packet.channels && 'tp9' in packet.channels) {
@@ -557,15 +569,20 @@ export class MuseTracker implements Tracker {
         avgTP10 /= count;
       }
 
-      // Calculate average PPG
-      let avgPPG = 0;
+      // Calculate PPG value from buffered optics/ppg packets
+      let ppgValue = 0;
       if (this.ppgBuffer.length > 0) {
+        let ppgSum = 0;
+        let ppgCount = 0;
         for (const packet of this.ppgBuffer) {
-          if (packet.channels && 'ppg1' in packet.channels) {
-            avgPPG += (packet.channels as any).ppg1 || 0;
+          if (packet.values && packet.values.length > 0) {
+            ppgSum += packet.values[0];
+            ppgCount++;
           }
         }
-        avgPPG /= this.ppgBuffer.length;
+        if (ppgCount > 0) {
+          ppgValue = ppgSum / ppgCount;
+        }
       }
 
       // Signal quality from HSI_PRECISION (SDK: 1=good, 2=mediocre, 4=poor)
@@ -582,7 +599,7 @@ export class MuseTracker implements Tracker {
         channel2_AF7: avgAF7,
         channel3_AF8: avgAF8,
         channel4_TP10: avgTP10,
-        ppg: avgPPG,
+        ppg: ppgValue,
         batteryLevel: this.lastBatteryLevel,
         signalQuality: signalQuality,
         connectionState: 'connected',
@@ -594,14 +611,15 @@ export class MuseTracker implements Tracker {
 
       // Save to database
       await this.trackerService.saveMuseData(museData);
-      
-      LOG.debug(`Saved aggregated Muse data: ${this.eegBuffer.length} EEG, ${this.ppgBuffer.length} PPG samples`);
+
+      LOG.debug(
+        `Saved aggregated Muse data: ${this.eegBuffer.length} EEG, ${this.ppgBuffer.length} PPG samples`
+      );
 
       // Clear buffers
       this.eegBuffer = [];
       this.ppgBuffer = [];
       this.batteryBuffer = [];
-      
     } catch (error) {
       LOG.error('Error aggregating and saving Muse data', error);
     }
@@ -615,7 +633,7 @@ export class MuseTracker implements Tracker {
     LOG.info(`Native module available: ${this.nativeAvailable}`);
     LOG.info(`Tracker running: ${this.isRunning}`);
     LOG.info(`Connected: ${this.isConnected}`);
-    
+
     if (!this.nativeAvailable || !this.museCore) {
       LOG.error('❌ Native module is NOT available!');
       LOG.info('  - Check if muse-tracker package is installed');
@@ -627,7 +645,7 @@ export class MuseTracker implements Tracker {
       const devices = this.getDiscoveredDevices();
       LOG.info(`Discovered devices: ${devices.length}`);
       devices.forEach((d, i) => {
-        LOG.info(`  ${i+1}. ${d.name} (${d.macAddress})`);
+        LOG.info(`  ${i + 1}. ${d.name} (${d.macAddress})`);
         LOG.info(`     - RSSI: ${d.rssi}`);
       });
 
@@ -641,8 +659,7 @@ export class MuseTracker implements Tracker {
     } catch (err) {
       LOG.error('Error during diagnostic:', err);
     }
-    
+
     LOG.info('=== End Diagnostics ===');
   }
 }
-

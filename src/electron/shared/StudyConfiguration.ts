@@ -30,10 +30,22 @@ export interface ExperienceSamplingTrackerConfiguration {
   userDefinedInterval_h?: number[];
 }
 
+export interface MuseTrackerConfiguration {
+  enabled: boolean;
+  intervalInMs: number;
+  autoConnect: boolean;
+}
+
+export interface TaskTrackerConfiguration {
+  enabled: boolean;
+}
+
 export interface TrackerConfiguration {
   windowActivityTracker: WindowActivityTrackerConfiguration;
   userInputTracker: UserInputTrackerConfiguration;
   experienceSamplingTracker: ExperienceSamplingTrackerConfiguration;
+  museTracker: MuseTrackerConfiguration;
+  taskTracker?: TaskTrackerConfiguration;
 }
 
 export interface StudyConfiguration {

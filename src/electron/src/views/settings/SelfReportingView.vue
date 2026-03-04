@@ -1,79 +1,72 @@
 <script lang="ts" setup>
-import { onMounted, ref, computed } from 'vue'
-import Switch from '../../components/Switch.vue'
-import studyConfig from '../../../shared/study.config'
-import typedIpcRenderer from '../../utils/typedIpcRenderer'
+import { onMounted, ref, computed } from 'vue';
+import Switch from '../../components/Switch.vue';
+import studyConfig from '../../../shared/study.config';
+import typedIpcRenderer from '../../utils/typedIpcRenderer';
 
-const es = studyConfig.trackers.experienceSamplingTracker
-const allowUserToDisable = es.allowUserToDisable ?? true
-const allowUserToChangeInterval = es.allowUserToChangeInterval ?? true
+const es = studyConfig.trackers.experienceSamplingTracker;
+const allowUserToDisable = es.allowUserToDisable ?? true;
+const allowUserToChangeInterval = es.allowUserToChangeInterval ?? true;
 
-const disabled = ref(false)
-const selectedInterval = ref<number | null>(null)
+const disabled = ref(false);
+const selectedInterval = ref<number | null>(null);
 
-const intervalOptions = computed<number[]>(
-  () => (es.userDefinedInterval_h ?? []).filter((n: number) => Number.isFinite(n))
-)
-const questions = es.questions
+const intervalOptions = computed<number[]>(() =>
+  (es.userDefinedInterval_h ?? []).filter((n: number) => Number.isFinite(n))
+);
+const questions = es.questions;
 
-const defaultIntervalHours = es.intervalInMs / (1000 * 60 * 60)
+const defaultIntervalHours = es.intervalInMs / (1000 * 60 * 60);
 
 function formatHours(h: number): string {
-  return h < 1 ? `${Math.round(h * 60)} minutes` : `${h} hour(s)`
+  return h < 1 ? `${Math.round(h * 60)} minutes` : `${h} hour(s)`;
 }
 
 function pickClosestOption(target: number, options: number[], eps = 1e-6): number | null {
-  if (!options.length) return null
-  const exact = options.find(o => Math.abs(o - target) < eps)
-  if (exact !== undefined) return exact
-  return options.reduce((a, b) => (Math.abs(b - target) < Math.abs(a - target) ? b : a))
+  if (!options.length) return null;
+  const exact = options.find((o) => Math.abs(o - target) < eps);
+  if (exact !== undefined) return exact;
+  return options.reduce((a, b) => (Math.abs(b - target) < Math.abs(a - target) ? b : a));
 }
 
 const selectedDropdownValue = computed<number | ''>(() => {
-  if (selectedInterval.value !== null) return selectedInterval.value
-  const closest = pickClosestOption(defaultIntervalHours, intervalOptions.value)
-  return (closest ?? '') as number | ''
-})
+  if (selectedInterval.value !== null) return selectedInterval.value;
+  const closest = pickClosestOption(defaultIntervalHours, intervalOptions.value);
+  return (closest ?? '') as number | '';
+});
 
 async function load() {
-  const settings: any = await typedIpcRenderer.invoke('getSettings')
-  disabled.value = (settings.userDisabledExperienceSampling ?? 0) === 1
-  selectedInterval.value =
-    settings.userDefinedExperienceSamplingInterval_h ?? null
+  const settings: any = await typedIpcRenderer.invoke('getSettings');
+  disabled.value = (settings.userDisabledExperienceSampling ?? 0) === 1;
+  selectedInterval.value = settings.userDefinedExperienceSamplingInterval_h ?? null;
 }
 
 const onChangeSelfReportingEnabled = async (e: Event) => {
-  const isChecked = (e.target as HTMLInputElement).checked
-  disabled.value = !isChecked
+  const isChecked = (e.target as HTMLInputElement).checked;
+  disabled.value = !isChecked;
   await typedIpcRenderer.invoke(
     'setSettingsProp',
     'userDisabledExperienceSampling',
     disabled.value ? 1 : 0
-  )
-}
+  );
+};
 
 const onSelectInterval = async (val: string) => {
-  const v = val === '' ? null : Number(val)
-  selectedInterval.value = v
-  await typedIpcRenderer.invoke(
-    'setSettingsProp',
-    'userDefinedExperienceSamplingInterval_h',
-    v
-  )
-}
+  const v = val === '' ? null : Number(val);
+  selectedInterval.value = v;
+  await typedIpcRenderer.invoke('setSettingsProp', 'userDefinedExperienceSamplingInterval_h', v);
+};
 
-onMounted(load)
+onMounted(load);
 </script>
 
 <template>
   <div>
-    <article class="prose prose-lg mt-4 mb-5">
+    <article class="prose prose-lg mb-5 mt-4">
       <h1 class="mt-0">
         <span class="primary-blue">Self-Reflection</span>
       </h1>
-      <p class="text-base">
-        PersonalAnalytics allows you to periodically reflect.
-      </p>
+      <p class="text-base">PersonalAnalytics allows you to periodically reflect.</p>
     </article>
 
     <article class="prose mt-4">
@@ -86,7 +79,9 @@ onMounted(load)
       </div>
 
       <div
-        v-if="allowUserToChangeInterval && intervalOptions.length > 0" && !disabled
+        v-if="allowUserToChangeInterval && intervalOptions.length > 0"
+        &&
+        !disabled
         class="self-reporting-container"
       >
         <div class="form-control w-[70%] max-w-xl">
@@ -110,8 +105,8 @@ onMounted(load)
 
     <article class="prose prose-lg mt-4">
       <div class="self-reporting-container">
-        <div class="font-medium mb-2">Self-Reflection Questions:</div>
-        <ul class="list-disc ml-6">
+        <div class="mb-2 font-medium">Self-Reflection Questions:</div>
+        <ul class="ml-6 list-disc">
           <li v-for="q in questions" :key="q">{{ q }}</li>
         </ul>
       </div>

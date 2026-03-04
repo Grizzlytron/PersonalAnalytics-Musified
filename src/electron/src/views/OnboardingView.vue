@@ -74,7 +74,7 @@ const workHoursRef = ref<WorkHoursDto>({
   thursday: { startTime: '', endTime: '', isWorking: false },
   friday: { startTime: '', endTime: '', isWorking: false },
   saturday: { startTime: '', endTime: '', isWorking: false },
-  sunday: { startTime: '', endTime: '', isWorking: false },
+  sunday: { startTime: '', endTime: '', isWorking: false }
 });
 
 const activeTimesEnabled = ref(true);
@@ -101,7 +101,7 @@ onMounted(async () => {
 
   if (shouldShowActiveTimesStep.value) {
     try {
-      const workHours = await typedIpcRenderer.invoke('getWorkHours') as WorkHoursDto;
+      const workHours = (await typedIpcRenderer.invoke('getWorkHours')) as WorkHoursDto;
       workHoursRef.value = { ...workHours };
       const settings: any = await typedIpcRenderer.invoke('getSettings');
       activeTimesEnabled.value = settings.enabledWorkHours ?? true;
@@ -176,11 +176,11 @@ const onChangeActiveTimesEnabled = async (e: Event) => {
 </script>
 
 <template>
-  <div class="onboarding-view h-screen">
+  <div class="onboarding-view h-screen overflow-y-auto">
     <div v-if="!studyInfo" class="flex h-full w-full items-center justify-center">
       <span class="loading loading-spinner loading-lg" />
     </div>
-    <div v-else class="relative flex h-full flex-col justify-between dark:text-neutral-400">
+    <div v-else class="relative flex min-h-full flex-col dark:text-neutral-400">
       <transition-group :name="transitionName">
         <div v-if="currentNamedStep === 'welcome'" key="0" class="flex w-full flex-col">
           <div class="flex flex-row">
@@ -307,15 +307,17 @@ const onChangeActiveTimesEnabled = async (e: Event) => {
           </div>
         </div>
         <div v-else-if="currentNamedStep === 'active-times'" key="active-times" class="absolute">
-          <h1 class="mb-8 text-3xl font-medium text-neutral-800 dark:text-neutral-300">Active Times</h1>
+          <h1 class="mb-8 text-3xl font-medium text-neutral-800 dark:text-neutral-300">
+            Active Times
+          </h1>
           <article class="prose prose-lg max-w-none">
             <p>
-              Define your active times for each day of the week, such as the time you usually work or study.
-              Outside these times, no experience sampling pop-up is shown.
+              Define your active times for each day of the week, such as the time you usually work
+              or study. Outside these times, no experience sampling pop-up is shown.
             </p>
           </article>
 
-          <div class="mt-6 mb-4">
+          <div class="mb-4 mt-6">
             <Switch
               :modelValue="activeTimesEnabled"
               :label="'Enable/disable active work hours'"
@@ -325,7 +327,11 @@ const onChangeActiveTimesEnabled = async (e: Event) => {
 
           <div v-if="activeTimesEnabled" class="onboarding-work-hours-container">
             <div v-for="(workHoursDay, day) in workHoursRef" :key="day">
-              <WorkHoursRow :day="day" :pre-set-work-hours="workHoursDay!" :set-work-hours="updateWorkHours" />
+              <WorkHoursRow
+                :day="day"
+                :pre-set-work-hours="workHoursDay!"
+                :set-work-hours="updateWorkHours"
+              />
             </div>
           </div>
         </div>
@@ -353,7 +359,11 @@ const onChangeActiveTimesEnabled = async (e: Event) => {
             </p>
 
             <p>
-              Contact {{ studyInfo.contactName }} (<a :href="'mailto:' + studyInfo.contactEmail" target="_blank">{{ studyInfo.contactEmail }}</a>) in case of questions.
+              Contact {{ studyInfo.contactName }} (<a
+                :href="'mailto:' + studyInfo.contactEmail"
+                target="_blank"
+                >{{ studyInfo.contactEmail }}</a
+              >) in case of questions.
             </p>
           </article>
         </div>

@@ -10,6 +10,7 @@ import { DataExportType } from '../../shared/DataExportType.enum';
 import WindowActivityDto from '../../shared/dto/WindowActivityDto';
 import UserInputDto from '../../shared/dto/UserInputDto';
 import DataExportExperienceSamplingTracker from '../components/DataExportExperienceSamplingTracker.vue';
+import DataExportMuseTracker from '../components/DataExportMuseTracker.vue';
 import ExperienceSamplingDto from '../../shared/dto/ExperienceSamplingDto';
 import getRendererLogger from '../utils/Logger';
 
@@ -32,6 +33,8 @@ const exportExperienceSamplesSelectedOption = ref<DataExportType>(DataExportType
 const exportWindowActivitySelectedOption = ref<DataExportType>(DataExportType.None);
 const exportUserInputSelectedOption = ref<DataExportType>(DataExportType.None);
 
+const exportMuseSelectedOption = ref<boolean>(false);
+
 const obfuscationTermsInput = ref<string[]>();
 
 const isExporting = ref(false);
@@ -40,9 +43,10 @@ const hasExportError = ref(false);
 const pathToExportedFile = ref('');
 const fileName = ref('');
 
-const availableSteps = studyConfig.dataExportFormat === 'ExportToDDL'
-  ? ['export-1', 'export-2', 'upload-to-ddl'] // when uploading the export to the DDL
-  : ['export-1', 'export-2', 'create-export']; // when exporting to a file
+const availableSteps =
+  studyConfig.dataExportFormat === 'ExportToDDL'
+    ? ['export-1', 'export-2', 'upload-to-ddl'] // when uploading the export to the DDL
+    : ['export-1', 'export-2', 'create-export']; // when exporting to a file
 
 const maxSteps = computed(() => {
   return availableSteps.length;
@@ -53,25 +57,44 @@ const currentNamedStep = computed(() => {
 });
 
 onMounted(async () => {
-  studyInfo.value = (await typedIpcRenderer.invoke('getStudyInfo')) as StudyInfoDto;
+  // Fire all IPC calls in parallel instead of sequentially
+  const promises: Promise<void>[] = [];
+
+  promises.push(
+    typedIpcRenderer.invoke('getStudyInfo').then((info: any) => {
+      studyInfo.value = info as StudyInfoDto;
+    })
+  );
+
   if (studyConfig.trackers.experienceSamplingTracker.enabled) {
     exportExperienceSamplesSelectedOption.value = DataExportType.All;
-    mostRecentExperienceSamples.value = await typedIpcRenderer.invoke(
-      'getMostRecentExperienceSamplingDtos',
-      20
+    promises.push(
+      typedIpcRenderer.invoke('getMostRecentExperienceSamplingDtos', 20).then((data: any) => {
+        mostRecentExperienceSamples.value = data;
+      })
     );
   }
   if (studyConfig.trackers.windowActivityTracker.enabled) {
     exportWindowActivitySelectedOption.value = DataExportType.All;
-    mostRecentWindowActivities.value = await typedIpcRenderer.invoke(
-      'getMostRecentWindowActivityDtos',
-      20
+    promises.push(
+      typedIpcRenderer.invoke('getMostRecentWindowActivityDtos', 20).then((data: any) => {
+        mostRecentWindowActivities.value = data;
+      })
     );
   }
   if (studyConfig.trackers.userInputTracker.enabled) {
     exportUserInputSelectedOption.value = DataExportType.All;
-    mostRecentUserInputs.value = await typedIpcRenderer.invoke('getMostRecentUserInputDtos', 20);
+    promises.push(
+      typedIpcRenderer.invoke('getMostRecentUserInputDtos', 20).then((data: any) => {
+        mostRecentUserInputs.value = data;
+      })
+    );
   }
+  if (studyConfig.trackers.museTracker.enabled) {
+    exportMuseSelectedOption.value = true;
+  }
+
+  await Promise.all(promises);
   isLoading.value = false;
 });
 
@@ -172,7 +195,7 @@ async function handleNextStep() {
         exportUserInputSelectedOption.value,
         obfuscationTerms,
         studyConfig.dataExportEncrypted,
-        studyConfig.dataExportFormat, 
+        studyConfig.dataExportFormat,
         studyConfig.dataExportDDLProjectName
       );
 
@@ -180,12 +203,12 @@ async function handleNextStep() {
       hasExportError.value = false;
       // Also update the DataExportService if you change the file name here
       fileName.value = exportResult.fileName;
-
     } catch (e: unknown) {
       LOG.error(e);
       hasExportError.value = true;
-      const message = e instanceof Error ? e.message : typeof e === 'string' ? e : 'Unknown error during export';
-      
+      const message =
+        e instanceof Error ? e.message : typeof e === 'string' ? e : 'Unknown error during export';
+
       showDataExportError(message);
       handleBackStep();
     }
@@ -224,9 +247,7 @@ function revealItemInFolder(event: Event) {
     >
       <span class="loading loading-spinner loading-lg" />
       <div v-if="isExporting" class="max-w-lg px-6 text-neutral-600 dark:text-neutral-400">
-        <p class="text-lg font-medium">
-          Exporting and uploading your data...
-        </p>
+        <p class="text-lg font-medium">Exporting and uploading your data...</p>
         <p class="mt-2 text-sm">
           This may take a few minutes depending on the export size and your internet connection.
           Please keep this window open until the process is finished.
@@ -253,8 +274,8 @@ function revealItemInFolder(event: Event) {
                 <b class="dark:text-white">first review and later share your data</b>.
                 <span v-if="studyConfig.dataExportEncrypted">
                   The export that will be created with your permission in the next step will be
-                  encrypted and password-protected. </span
-                >
+                  encrypted and password-protected.
+                </span>
               </p>
               <p class="mb-4">
                 Below, you find additional information on the study and how the researchers ensure
@@ -264,7 +285,13 @@ function revealItemInFolder(event: Event) {
                 <tbody>
                   <tr>
                     <td>Contact:</td>
-                    <td>{{ studyInfo.contactName }} (<a :href="'mailto:' + studyInfo.contactEmail" target="_blank">{{ studyInfo.contactEmail }}</a>)</td>
+                    <td>
+                      {{ studyInfo.contactName }} (<a
+                        :href="'mailto:' + studyInfo.contactEmail"
+                        target="_blank"
+                        >{{ studyInfo.contactEmail }}</a
+                      >)
+                    </td>
                   </tr>
                   <tr>
                     <td>Study Website:</td>
@@ -323,10 +350,7 @@ function revealItemInFolder(event: Event) {
                     >{{ fileName }}</span
                   >).
                 </li>
-                <li>
-                  <a href="#" @click="openUploadUrl">Click here</a> to open the upload
-                  page.
-                </li>
+                <li><a href="#" @click="openUploadUrl">Click here</a> to open the upload page.</li>
                 <li>
                   Upload the file named
                   <span class="badge badge-neutral font-bold text-white">{{ fileName }}</span> using
@@ -388,6 +412,10 @@ function revealItemInFolder(event: Event) {
               :default-value="exportExperienceSamplesSelectedOption"
               @change="handleExperienceSamplingConfigChanged"
             />
+            <DataExportMuseTracker
+              v-if="studyConfig.trackers.museTracker.enabled"
+              v-model:should-share="exportMuseSelectedOption"
+            />
           </div>
         </transition-group>
       </div>
@@ -408,7 +436,12 @@ function revealItemInFolder(event: Event) {
           @click="handleNextStep"
         >
           <template v-if="currentStep === maxSteps - 1">Close </template>
-          <template v-else-if="studyConfig.dataExportFormat === 'ExportToDDL' && currentNamedStep === 'export-2'">Donate Data Export to Researchers</template>
+          <template
+            v-else-if="
+              studyConfig.dataExportFormat === 'ExportToDDL' && currentNamedStep === 'export-2'
+            "
+            >Donate Data Export to Researchers</template
+          >
           <template v-else>Next</template>
         </button>
       </div>

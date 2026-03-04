@@ -4,8 +4,8 @@ import { DataExportFormat } from '../../shared/DataExportFormat.enum';
 import UserInputDto from '../../shared/dto/UserInputDto';
 import WindowActivityDto from '../../shared/dto/WindowActivityDto';
 import ExperienceSamplingDto from '../../shared/dto/ExperienceSamplingDto';
-import { WorkHoursDto } from '../../shared/dto/WorkHoursDto'
-import { Settings } from 'electron/main'
+import { WorkHoursDto } from '../../shared/dto/WorkHoursDto';
+import { Settings } from 'electron/main';
 
 type Commands = {
   createExperienceSample: (
@@ -45,5 +45,26 @@ type Commands = {
   startAllTrackers: () => void;
   triggerPermissionCheckAccessibility: (prompt: boolean) => boolean;
   triggerPermissionCheckScreenRecording: () => boolean;
+  'muse:get-tracker-status': () => Promise<{
+    isRunning: boolean;
+    connectedDevice: {
+      name: string;
+      signalQuality: number;
+      battery: number;
+      heartRate: number;
+    } | null;
+    latestData: any[];
+    totalDataPoints: number;
+    averageSignalQuality: number;
+  }>;
+  'muse:start-tracker': () => Promise<void>;
+  'muse:stop-tracker': () => Promise<void>;
+  'muse:get-data-for-export': () => Promise<any[]>;
+  'muse:get-discovered-devices': () => Promise<
+    Array<{ name: string; macAddress: string; rssi: number }>
+  >;
+  'muse:connect-device': (macAddress: string) => Promise<void>;
+  'muse:disconnect-device': () => Promise<void>;
+  'muse:run-diagnostics': () => Promise<void>;
 };
 export default Commands;

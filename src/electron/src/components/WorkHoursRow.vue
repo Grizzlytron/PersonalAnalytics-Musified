@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { hourList } from './hoursList';
-import {WorkHoursDto, WorkHoursDayDto} from '../../shared/dto/WorkHoursDto'
-import Switch from './Switch.vue'
+import { WorkHoursDto, WorkHoursDayDto } from '../../shared/dto/WorkHoursDto';
+import Switch from './Switch.vue';
 
 const props = defineProps<{
   day: keyof WorkHoursDto;
@@ -10,11 +10,14 @@ const props = defineProps<{
   setWorkHours: (day: keyof WorkHoursDto, workHoursDay: WorkHoursDayDto) => Promise<void>;
 }>();
 
-watch(() => props.preSetWorkHours, (newWorkHours) => {
-  isEnabled.value = newWorkHours.isWorking;
-  startTime.value = newWorkHours.startTime;
-  endTime.value = newWorkHours.endTime;
-});
+watch(
+  () => props.preSetWorkHours,
+  (newWorkHours) => {
+    isEnabled.value = newWorkHours.isWorking;
+    startTime.value = newWorkHours.startTime;
+    endTime.value = newWorkHours.endTime;
+  }
+);
 
 // Refs for reactive variables
 const isEnabled = ref(props.preSetWorkHours.isWorking);
@@ -29,7 +32,7 @@ const timeStringToMinutes = (timeStr: string): number => {
 
 const capitalizeFirstLetter = (str: string): string => {
   return str.charAt(0).toUpperCase() + str.slice(1);
-}
+};
 
 // Computed values for time options
 const startTimeOptions = computed(() =>
@@ -45,7 +48,7 @@ const onChangeWorkdayIsEnabled = async (e: Event) => {
   const isChecked = (e.target as HTMLInputElement).checked;
   const updatedWorkHours: WorkHoursDayDto = {
     ...props.preSetWorkHours,
-    isWorking: isChecked,
+    isWorking: isChecked
   };
   await props.setWorkHours(props.day, updatedWorkHours);
 };
@@ -53,7 +56,7 @@ const onChangeWorkdayIsEnabled = async (e: Event) => {
 const onSelectStartChange = async () => {
   const updatedWorkHours: any = {
     ...props.preSetWorkHours,
-    startTime: startTime.value,
+    startTime: startTime.value
   };
 
   await props.setWorkHours(props.day, updatedWorkHours);
@@ -62,7 +65,7 @@ const onSelectStartChange = async () => {
 const onSelectEndChange = async () => {
   const updatedWorkHours: any = {
     ...props.preSetWorkHours,
-    endTime: endTime.value,
+    endTime: endTime.value
   };
 
   await props.setWorkHours(props.day, updatedWorkHours);
@@ -70,30 +73,26 @@ const onSelectEndChange = async () => {
 </script>
 
 <template>
-  <div class="z-10 mt-10 mb-10 flex items-center fix-height">
+  <div class="fix-height z-10 mb-10 mt-10 flex items-center">
     <div class="outer-switch-container">
-      <Switch :modelValue="isEnabled" :label="capitalizeFirstLetter(props.day)" :on-change="onChangeWorkdayIsEnabled" />
+      <Switch
+        :modelValue="isEnabled"
+        :label="capitalizeFirstLetter(props.day)"
+        :on-change="onChangeWorkdayIsEnabled"
+      />
     </div>
 
     <div v-if="isEnabled" class="time-selectors">
       <span>From:</span>
       <select class="ml-2 p-1" v-model="startTime" @change="onSelectStartChange">
-        <option
-          v-for="time in startTimeOptions"
-          :key="time"
-          :value="time"
-        >
+        <option v-for="time in startTimeOptions" :key="time" :value="time">
           {{ time }}
         </option>
       </select>
 
       <span>To:</span>
-      <select class="ml-2 p-1" v-model="endTime" @change="onSelectEndChange"> 
-        <option
-          v-for="time in endTimeOptions"
-          :key="time"
-          :value="time"
-        >
+      <select class="ml-2 p-1" v-model="endTime" @change="onSelectEndChange">
+        <option v-for="time in endTimeOptions" :key="time" :value="time">
           {{ time }}
         </option>
       </select>
@@ -104,7 +103,6 @@ const onSelectEndChange = async () => {
     </div>
   </div>
 </template>
-
 
 <style scoped>
 .time-selectors select {

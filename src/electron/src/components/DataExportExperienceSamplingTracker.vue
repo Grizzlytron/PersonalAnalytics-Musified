@@ -15,14 +15,13 @@ defineProps({
     <div class="prose max-w-none">
       <h2>Your Self Reported data</h2>
       <p>
-        Your responses to the self-reflection questions will also be shared with the
-        researchers. They do <b>not</b> contain any sensitive data.</p>
-        <p>Here is a sample of your unmodified data:</p>
+        Your responses to the self-reflection questions will also be shared with the researchers.
+        They do <b>not</b> contain any sensitive data.
+      </p>
+      <p>Here is a sample of your unmodified data:</p>
     </div>
     <div class="max-h-48 overflow-auto">
-      <table
-        class="table table-zebra table-pin-rows w-full overflow-auto text-xs"
-      >
+      <table class="table table-zebra table-pin-rows w-full overflow-auto text-xs">
         <thead class="border-b">
           <tr>
             <th>Question</th>

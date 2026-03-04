@@ -1,15 +1,16 @@
 {
   "name": "personal-analytics",
-  "description": "PersonalAnalytics is a privacy-protecting, open-source self-monitoring software",
-  "version": "0.0.51",
+  "description": "Personalanalytics extended with Muse tracking is a privacy-protecting, open-source self-monitoring software extended with biometric data collection",
+  "version": "1.0.0",
   "main": "dist-electron/main/index.js",
   "type": "module",
   "author": {
-    "name": "HASEL",
-    "email": "dev@hasel.dev"
+    "name": "Lucas Timothy Leo Baer",
+    "email": "lucastimothyleo.baer@uzh.ch"
   },
   "scripts": {
     "dev": "vite",
+    "prebuild": "npm --prefix PA.MuseTracker/typescript run build",
     "build": "vue-tsc --noEmit && vite build && electron-builder --config electron-builder.config.cjs",
     "build:mac": "npm run build:mac:arm64 && npm run build:mac:x64",
     "build:mac:arm64": "vue-tsc --noEmit && vite build && electron-builder --mac --arm64 --config electron-builder.config.cjs",
@@ -23,7 +24,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/HASEL-UZH/PersonalAnalytics"
+    "url": "https://github.com/grizzlyTron/Muselytics"
   },
   "devDependencies": {
     "@electron/notarize": "^2.3.0",
@@ -63,16 +64,22 @@
   },
   "dependencies": {
     "archiver": "^7.0.1",
+    "axios": "^1.12.0",
+    "baseline-browser-mapping": "^2.9.11",
     "better-sqlite3": "^9.4.0",
     "better-sqlite3-multiple-ciphers": "^9.4.0",
-    "dompurify": "^3.3.1",
+    "caniuse-lite": "^1.0.30001761",
+    "chart.js": "^4.5.1",
+    "dompurify": "^3.2.4",
     "electron-log": "^5.1.1",
     "form-data": "^4.0.5",
     "jsdom": "^25.0.1",
+    "muse-tracker": "file:PA.MuseTracker/typescript",
     "node-schedule": "^2.1.1",
     "typeorm": "^0.3.28",
     "user-input-tracker": "file:PA.UserInputTracker/typescript",
-    "vue-router": "^4.6.4",
+    "vue-chartjs": "^5.3.3",
+    "vue-router": "^4.2.5",
     "windows-activity-tracker": "file:PA.WindowsActivityTracker/typescript"
   }
 }

@@ -38,8 +38,17 @@ const workScheduleService: WorkScheduleService = new WorkScheduleService();
 const appUpdaterService: AppUpdaterService = new AppUpdaterService();
 const windowService: WindowService = new WindowService(appUpdaterService);
 const experienceSamplingService: ExperienceSamplingService = new ExperienceSamplingService();
-const trackers: TrackerService = new TrackerService(studyConfig.trackers, windowService, workScheduleService);
-const ipcHandler: IpcHandler = new IpcHandler(windowService, trackers, experienceSamplingService, workScheduleService);
+const trackers: TrackerService = new TrackerService(
+  studyConfig.trackers,
+  windowService,
+  workScheduleService
+);
+const ipcHandler: IpcHandler = new IpcHandler(
+  windowService,
+  trackers,
+  experienceSamplingService,
+  workScheduleService
+);
 
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith('6.1')) {
@@ -67,7 +76,6 @@ const LOG = getMainLogger('Main');
 
 // Load environment variables from .env file
 dotenv.config();
-
 
 app.whenReady().then(async () => {
   app.setAppUserModelId('ch.ifi.hasel.personal-analytics');
@@ -129,8 +137,13 @@ app.whenReady().then(async () => {
       await trackers.registerTrackerCallback(TrackerType.DaysParticipatedTracker);
     }
 
+    if (studyConfig.trackers.museTracker.enabled) {
+      await trackers.registerTrackerCallback(TrackerType.MuseTracker);
+    }
+
     const settings: Settings = await Settings.findOneBy({ onlyOneEntityShouldExist: 1 });
-    const isAutoLaunch = app.getLoginItemSettings().wasOpenedAtLogin || process.argv.includes('--hidden');
+    const isAutoLaunch =
+      app.getLoginItemSettings().wasOpenedAtLogin || process.argv.includes('--hidden');
 
     // show onboarding window (if never shown or macOS permissions are missing)
     if (
@@ -143,13 +156,13 @@ app.whenReady().then(async () => {
       await windowService.createOnboardingWindow();
       settings.onboardingShown = true;
       await settings.save();
-    
-    // show PA running page when it was not shown before (on macOS) OR if it was manually started
+
+      // show PA running page when it was not shown before (on macOS) OR if it was manually started
     } else if (
       (is.macOS &&
-      settings.onboardingShown === true &&
-      settings.studyAndTrackersStartedShown === false) ||
-      (! isAutoLaunch)
+        settings.onboardingShown === true &&
+        settings.studyAndTrackersStartedShown === false) ||
+      !isAutoLaunch
     ) {
       await windowService.createOnboardingWindow('study-trackers-started');
       settings.studyAndTrackersStartedShown = true;
@@ -207,7 +220,6 @@ app.whenReady().then(async () => {
     );
     app.exit();
   }
-
 });
 
 let isAppQuitting = false;

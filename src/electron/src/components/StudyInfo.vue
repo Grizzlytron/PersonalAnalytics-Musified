@@ -25,7 +25,13 @@ defineProps({
         </tr>
         <tr>
           <td>Contact:</td>
-          <td>{{ studyInfo.contactName }} (<a :href="'mailto:' + studyInfo.contactEmail" target="_blank">{{ studyInfo.contactEmail }}</a>)</td>
+          <td>
+            {{ studyInfo.contactName }} (<a
+              :href="'mailto:' + studyInfo.contactEmail"
+              target="_blank"
+              >{{ studyInfo.contactEmail }}</a
+            >)
+          </td>
         </tr>
         <tr>
           <td>Study Website:</td>

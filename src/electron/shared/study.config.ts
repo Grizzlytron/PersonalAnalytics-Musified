@@ -35,13 +35,13 @@ const studyConfig: StudyConfiguration = {
       enabledWorkHours: false,
       scale: 7,
       questions: [
-        'Compared to your normal level of productivity, how productive do you consider the previous session?',
-        'How well did you spend your time in the previous session?',
-        'How focused have you been in the last interval?'
+        // 'Compared to your normal level of productivity, how productive do you consider the previous session?',
+        // 'How well did you spend your time in the previous session?',
+        'How focused did you feel in the last session?'
       ],
       responseOptions: [
-        ['not at all productive', 'moderately productive', 'very productive'],
-        ['not well', 'moderately well', 'very well'],
+        // ['not at all productive', 'moderately productive', 'very productive'],
+        // ['not well', 'moderately well', 'very well'],
         ['not focused', 'moderately focused', 'very focused']
       ],
       intervalInMs: 1000 * 60 * 5, // default interval (must be listed in userDefinedInterval_h if set)

@@ -29,6 +29,7 @@
 
       <div class="mb-4">
         <p class="mb-2 text-sm text-base-content/60">Total Data Points: {{ totalDataPoints }}</p>
+        <p class="text-xs text-base-content/50">Showing latest preview records</p>
       </div>
 
       <div class="max-h-96 w-full overflow-y-auto">
@@ -36,36 +37,19 @@
           <thead class="sticky top-0 bg-base-300">
             <tr>
               <th>Timestamp</th>
-              <th>Device</th>
               <th>TP9 (μV)</th>
               <th>AF7 (μV)</th>
               <th>AF8 (μV)</th>
               <th>TP10 (μV)</th>
-              <th>Signal Quality</th>
-              <th>Battery</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(row, index) in displayedData" :key="index" class="hover">
               <td class="text-xs">{{ formatTimestamp(row.timestamp) }}</td>
-              <td class="text-xs">{{ row.deviceName }}</td>
               <td class="text-xs">{{ formatNumber(row.channel1_TP9) }}</td>
               <td class="text-xs">{{ formatNumber(row.channel2_AF7) }}</td>
               <td class="text-xs">{{ formatNumber(row.channel3_AF8) }}</td>
               <td class="text-xs">{{ formatNumber(row.channel4_TP10) }}</td>
-              <td>
-                <span
-                  class="badge badge-sm"
-                  :class="{
-                    'badge-success': row.signalQuality !== undefined && row.signalQuality <= 1,
-                    'badge-warning': row.signalQuality === 2,
-                    'badge-error': row.signalQuality !== undefined && row.signalQuality >= 3
-                  }"
-                >
-                  {{ row.signalQuality ?? 'N/A' }}/4
-                </span>
-              </td>
-              <td class="text-xs">{{ row.batteryLevel }}%</td>
             </tr>
           </tbody>
         </table>
@@ -79,10 +63,6 @@
     <div class="mt-4 rounded-lg bg-base-100 p-4">
       <h4 class="mb-2 text-sm font-semibold">Data Summary</h4>
       <div class="grid grid-cols-2 gap-2 text-sm">
-        <div>
-          <span class="text-base-content/60">Connected Devices:</span>
-          <span class="font-semibold">{{ uniqueDevices }}</span>
-        </div>
         <div>
           <span class="text-base-content/60">Date Range:</span>
           <span class="font-semibold">{{ dateRange }}</span>
@@ -99,17 +79,11 @@ import typedIpcRenderer from '../utils/typedIpcRenderer';
 
 interface MuseData {
   id: string;
-  deviceId: string;
-  deviceName: string;
   timestamp: Date;
   channel1_TP9?: number;
   channel2_AF7?: number;
   channel3_AF8?: number;
   channel4_TP10?: number;
-  ppg?: number;
-  batteryLevel?: number;
-  signalQuality?: number;
-  connectionState?: string;
 }
 
 const props = defineProps<{
@@ -136,18 +110,10 @@ const totalDataPoints = computed(() => {
   return data.value.length;
 });
 
-const uniqueDevices = computed(() => {
-  const devices = new Set(data.value.map((d) => d.deviceId));
-  return devices.size;
-});
-
 const dateRange = computed(() => {
   if (data.value.length === 0) return 'No data';
-  const sorted = [...data.value].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
-  const start = formatTimestamp(sorted[0].timestamp);
-  const end = formatTimestamp(sorted[sorted.length - 1].timestamp);
+  const start = formatTimestamp(data.value[0].timestamp);
+  const end = formatTimestamp(data.value[data.value.length - 1].timestamp);
   return `${start} - ${end}`;
 });
 

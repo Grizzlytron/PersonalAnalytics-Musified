@@ -9,7 +9,8 @@ import { UserInputEntity } from '../entities/UserInputEntity';
 import { Settings } from '../entities/Settings';
 import { UsageDataEntity } from '../entities/UsageDataEntity';
 import { WorkDayEntity } from '../entities/WorkDayEntity';
-import { MuseEntity } from '../entities/MuseEntity';
+import { MuseRawEegEntity } from '../entities/MuseRawEegEntity';
+import { MuseMetadataEntity } from '../entities/MuseMetadataEntity';
 
 const LOG = getMainLogger('DatabaseService');
 
@@ -35,7 +36,8 @@ export class DatabaseService {
       UserInputEntity,
       WindowActivityEntity,
       WorkDayEntity,
-      MuseEntity
+      MuseRawEegEntity,
+      MuseMetadataEntity
     ];
 
     let options: DataSourceOptions = {

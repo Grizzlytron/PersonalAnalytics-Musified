@@ -84,7 +84,7 @@ export class TrackerService {
       const daysParticipatedTracker = new DaysParticipatedTracker();
       this.trackers.push(daysParticipatedTracker);
     } else if (this.config.museTracker.enabled && trackerType === TrackerType.MuseTracker) {
-      const museTracker: MuseTracker = new MuseTracker();
+      const museTracker: MuseTracker = new MuseTracker(this.config.museTracker.intervalInMs);
       this.trackers.push(museTracker);
     } else {
       throw new Error(`Tracker ${trackerType} not enabled or unsupported!`);

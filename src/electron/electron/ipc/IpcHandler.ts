@@ -23,7 +23,7 @@ import { JSDOM } from 'jsdom';
 import DOMPurify from 'dompurify';
 import { WorkScheduleService } from 'electron/main/services/WorkScheduleService';
 import { WorkHoursDto } from 'shared/dto/WorkHoursDto';
-import { MuseEntity } from '../main/entities/MuseEntity';
+import { MuseRawEegEntity } from '../main/entities/MuseRawEegEntity';
 import path from 'path';
 
 const LOG = getMainLogger('IpcHandler');
@@ -270,66 +270,94 @@ export class IpcHandler {
     }
   }
 
+  private downsampleRawEegForUi(
+    raw: Array<{ id: number; timestamp: Date; tp9: number; af7: number; af8: number; tp10: number }>,
+    sampleIntervalMs: number
+  ): Array<{ id: number; timestamp: Date; tp9: number; af7: number; af8: number; tp10: number }> {
+    if (raw.length <= 1) {
+      return raw;
+    }
+
+    const sorted = [...raw].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    const buckets = new Map<number, (typeof sorted)[number]>();
+    for (const sample of sorted) {
+      const ts = new Date(sample.timestamp).getTime();
+      const bucket = Math.floor(ts / sampleIntervalMs) * sampleIntervalMs;
+      // Keep latest sample in each 500ms bucket.
+      buckets.set(bucket, sample);
+    }
+
+    return Array.from(buckets.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([, sample]) => sample);
+  }
+
   // Muse Tracker IPC Handlers
-  private async getMuseTrackerStatus(): Promise<any> {
+  private async getMuseTrackerStatus(includeDenseData: boolean = true): Promise<any> {
     try {
+      const sampleIntervalMs = 500;
       const runningTrackers = this.trackerService.getRunningTrackerNames();
       const isMuseRunning = runningTrackers.includes('MuseTracker');
       const tracker = this.trackerService.getTracker('MuseTracker') as any;
 
-      // Get latest data (limit to 50 for performance)
+      // Pull a recent raw window and downsample to 500ms excerpts for UI responsiveness.
+      // Non-EEG tabs request a lighter dataset to reduce CPU/IO load.
+      const rawWindowSize = includeDenseData ? 20000 : 2000;
       const museService = new MuseTrackerService();
-      const latestData = await museService.getMostRecentMuseData(50);
+      const recentRawData = await museService.getMostRecentRawEegData(rawWindowSize);
+      const latestData = this.downsampleRawEegForUi(recentRawData, sampleIntervalMs);
+      const latestMetadata = await museService.getLatestMetadata();
 
       // Get total count efficiently
-      const totalDataPoints = await MuseEntity.count();
+      const totalDataPoints = await MuseRawEegEntity.count();
+      const trackedMinutes = await museService.getRawEegTrackedMinutes();
 
       // Get connected device (single device) using live tracker state when available
       let connectedDevice = null;
       const isConnected = !!tracker?.isDeviceConnected?.();
       if (isConnected) {
-        const latestRecord = latestData.length > 0 ? latestData[0] : null;
         const connectedInfo = tracker?.getConnectedDevice?.();
-        const liveBattery = tracker?.getBatteryLevel?.();
-        // Prefer live battery, but also accept 0 as valid (fully discharged), fall back to DB if undefined/null
-        const batteryLevel =
-          liveBattery !== undefined && liveBattery !== null
-            ? liveBattery
-            : (latestRecord?.batteryLevel ?? 0);
-        const liveHeartRate = tracker?.getHeartRate?.() ?? 0;
         connectedDevice = {
-          name: connectedInfo?.name || latestRecord?.deviceName || 'Unknown',
-          signalQuality: latestRecord?.signalQuality || 0,
-          battery: batteryLevel,
-          heartRate: liveHeartRate
+          name: connectedInfo?.name || 'Unknown',
+          signalQuality: latestMetadata?.signalQuality ?? null,
+          battery: tracker?.getBatteryLevel?.() ?? latestMetadata?.batteryLevel ?? 0
         };
       }
 
-      // Calculate average signal quality — only meaningful when a device is connected
       let avgQuality = 0;
-      if (connectedDevice && latestData.length > 0) {
-        const qualitySum = latestData.reduce((sum, d) => sum + (d.signalQuality || 0), 0);
-        avgQuality = Math.round(qualitySum / latestData.length);
+      const qualityValues = [latestMetadata?.signalQuality].filter(
+        (q): q is number => typeof q === 'number' && Number.isFinite(q)
+      );
+      if (qualityValues.length > 0) {
+        avgQuality = Math.round(
+          qualityValues.reduce((sum, q) => sum + q, 0) / qualityValues.length
+        );
       }
 
       return {
         isRunning: isMuseRunning,
         connectedDevice: connectedDevice,
+        uiSampleIntervalMs: sampleIntervalMs,
         latestData: latestData.map((d) => ({
           id: d.id,
-          deviceId: d.deviceId,
-          deviceName: d.deviceName,
           timestamp: d.timestamp,
-          channel1_TP9: d.channel1_TP9,
-          channel2_AF7: d.channel2_AF7,
-          channel3_AF8: d.channel3_AF8,
-          channel4_TP10: d.channel4_TP10,
-          ppg: d.ppg,
-          batteryLevel: d.batteryLevel,
-          signalQuality: d.signalQuality,
-          connectionState: d.connectionState
+          channel1_TP9: d.tp9,
+          channel2_AF7: d.af7,
+          channel3_AF8: d.af8,
+          channel4_TP10: d.tp10,
+          batteryLevel: latestMetadata?.batteryLevel,
+          signalQuality: latestMetadata?.signalQuality,
+          hsiTp9: latestMetadata?.hsiTp9,
+          hsiAf7: latestMetadata?.hsiAf7,
+          hsiAf8: latestMetadata?.hsiAf8,
+          hsiTp10: latestMetadata?.hsiTp10,
+          connectionState: 'connected'
         })),
         totalDataPoints: totalDataPoints,
+        trackedMinutes,
         averageSignalQuality: avgQuality
       };
     } catch (error) {
@@ -347,7 +375,13 @@ export class IpcHandler {
   private async startMuseTracker(): Promise<void> {
     try {
       LOG.info('Starting Muse Tracker from IPC');
-      await this.trackerService.startAllTrackers();
+      const tracker = this.trackerService.getTracker('MuseTracker') as any;
+      if (!tracker) {
+        throw new Error('Muse tracker not available');
+      }
+      if (!tracker.isRunning) {
+        await tracker.start();
+      }
     } catch (error) {
       LOG.error('Error starting Muse tracker', error);
       throw error;
@@ -357,7 +391,13 @@ export class IpcHandler {
   private async stopMuseTracker(): Promise<void> {
     try {
       LOG.info('Stopping Muse Tracker from IPC');
-      await this.trackerService.stopAllTrackers();
+      const tracker = this.trackerService.getTracker('MuseTracker') as any;
+      if (!tracker) {
+        throw new Error('Muse tracker not available');
+      }
+      if (tracker.isRunning) {
+        await tracker.stop();
+      }
     } catch (error) {
       LOG.error('Error stopping Muse tracker', error);
       throw error;
@@ -366,23 +406,17 @@ export class IpcHandler {
 
   private async getMuseDataForExport(): Promise<any[]> {
     try {
-      const allData = await MuseEntity.find({
-        order: { timestamp: 'ASC' }
-      });
+      const museService = new MuseTrackerService();
+      const previewLimit = 5000;
+      const allData = await museService.getRawEegDataForExport(previewLimit);
 
       return allData.map((d) => ({
         id: d.id,
-        deviceId: d.deviceId,
-        deviceName: d.deviceName,
         timestamp: d.timestamp,
-        channel1_TP9: d.channel1_TP9,
-        channel2_AF7: d.channel2_AF7,
-        channel3_AF8: d.channel3_AF8,
-        channel4_TP10: d.channel4_TP10,
-        ppg: d.ppg,
-        batteryLevel: d.batteryLevel,
-        signalQuality: d.signalQuality,
-        connectionState: d.connectionState
+        channel1_TP9: d.tp9,
+        channel2_AF7: d.af7,
+        channel3_AF8: d.af8,
+        channel4_TP10: d.tp10
       }));
     } catch (error) {
       LOG.error('Error getting Muse data for export', error);

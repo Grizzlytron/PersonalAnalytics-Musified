@@ -1,50 +1,25 @@
-import { MuseEntity } from '../../entities/MuseEntity';
+import { MuseRawEegEntity } from '../../entities/MuseRawEegEntity';
+import { MuseMetadataEntity } from '../../entities/MuseMetadataEntity';
 import getMainLogger from '../../../config/Logger';
 
 const LOG = getMainLogger('MuseTrackerService');
 
-export interface MuseData {
-  deviceId: string;
-  deviceName: string;
+export interface RawEegSample {
   timestamp: Date;
-  // EEG channels
-  channel1_TP9?: number;
-  channel2_AF7?: number;
-  channel3_AF8?: number;
-  channel4_TP10?: number;
-  // Heart rate
-  ppg?: number;
-  heartRate?: number;
-  // Device status
+  tp9: number;
+  af7: number;
+  af8: number;
+  tp10: number;
+}
+
+export interface MetadataSample {
+  timestamp: Date;
   batteryLevel?: number;
+  hsiTp9?: number;
+  hsiAf7?: number;
+  hsiAf8?: number;
+  hsiTp10?: number;
   signalQuality?: number;
-  connectionState?: string;
-  // Band powers - Relative
-  alphaRelative?: number;
-  betaRelative?: number;
-  deltaRelative?: number;
-  thetaRelative?: number;
-  gammaRelative?: number;
-  // Band powers - Absolute
-  alphaAbsolute?: number;
-  betaAbsolute?: number;
-  deltaAbsolute?: number;
-  thetaAbsolute?: number;
-  gammaAbsolute?: number;
-  // Band powers - Scores
-  alphaScore?: number;
-  betaScore?: number;
-  deltaScore?: number;
-  thetaScore?: number;
-  gammaScore?: number;
-  // Quality indicators
-  isGood?: number;
-  varianceEeg?: number;
-  // Movement
-  accelerometerAvg?: number;
-  gyroAvg?: number;
-  // Metadata
-  additionalData?: string;
 }
 
 export class MuseTrackerService {
@@ -52,110 +27,138 @@ export class MuseTrackerService {
     return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   }
 
-  public static async handleMuseData(data: MuseData): Promise<void> {
+  public static async saveRawEegBatch(samples: RawEegSample[]): Promise<void> {
+    if (samples.length === 0) {
+      return;
+    }
+
     try {
-      LOG.debug(`Saving Muse data from device: ${data.deviceId}`);
-
-      const entity = await MuseEntity.save({
-        deviceId: data.deviceId,
-        deviceName: data.deviceName,
-        timestamp: data.timestamp,
-        // EEG channels
-        channel1_TP9: MuseTrackerService.finiteNumberOrUndefined(data.channel1_TP9),
-        channel2_AF7: MuseTrackerService.finiteNumberOrUndefined(data.channel2_AF7),
-        channel3_AF8: MuseTrackerService.finiteNumberOrUndefined(data.channel3_AF8),
-        channel4_TP10: MuseTrackerService.finiteNumberOrUndefined(data.channel4_TP10),
-        // Heart rate
-        ppg: MuseTrackerService.finiteNumberOrUndefined(data.ppg),
-        heartRate: MuseTrackerService.finiteNumberOrUndefined(data.heartRate),
-        // Device status
-        batteryLevel: MuseTrackerService.finiteNumberOrUndefined(data.batteryLevel),
-        signalQuality: MuseTrackerService.finiteNumberOrUndefined(data.signalQuality),
-        connectionState: data.connectionState,
-        // Band powers - Relative
-        alphaRelative: MuseTrackerService.finiteNumberOrUndefined(data.alphaRelative),
-        betaRelative: MuseTrackerService.finiteNumberOrUndefined(data.betaRelative),
-        deltaRelative: MuseTrackerService.finiteNumberOrUndefined(data.deltaRelative),
-        thetaRelative: MuseTrackerService.finiteNumberOrUndefined(data.thetaRelative),
-        gammaRelative: MuseTrackerService.finiteNumberOrUndefined(data.gammaRelative),
-        // Band powers - Absolute
-        alphaAbsolute: MuseTrackerService.finiteNumberOrUndefined(data.alphaAbsolute),
-        betaAbsolute: MuseTrackerService.finiteNumberOrUndefined(data.betaAbsolute),
-        deltaAbsolute: MuseTrackerService.finiteNumberOrUndefined(data.deltaAbsolute),
-        thetaAbsolute: MuseTrackerService.finiteNumberOrUndefined(data.thetaAbsolute),
-        gammaAbsolute: MuseTrackerService.finiteNumberOrUndefined(data.gammaAbsolute),
-        // Band powers - Scores
-        alphaScore: MuseTrackerService.finiteNumberOrUndefined(data.alphaScore),
-        betaScore: MuseTrackerService.finiteNumberOrUndefined(data.betaScore),
-        deltaScore: MuseTrackerService.finiteNumberOrUndefined(data.deltaScore),
-        thetaScore: MuseTrackerService.finiteNumberOrUndefined(data.thetaScore),
-        gammaScore: MuseTrackerService.finiteNumberOrUndefined(data.gammaScore),
-        // Quality indicators
-        isGood: MuseTrackerService.finiteNumberOrUndefined(data.isGood),
-        varianceEeg: MuseTrackerService.finiteNumberOrUndefined(data.varianceEeg),
-        // Movement
-        accelerometerAvg: MuseTrackerService.finiteNumberOrUndefined(data.accelerometerAvg),
-        gyroAvg: MuseTrackerService.finiteNumberOrUndefined(data.gyroAvg),
-        // Metadata
-        additionalData: data.additionalData
-      });
-
-      LOG.debug(`Muse data saved with id: ${entity.id}`);
+      await MuseRawEegEntity.createQueryBuilder()
+        .insert()
+        .into(MuseRawEegEntity)
+        .values(
+          samples.map((sample) => ({
+            timestamp: sample.timestamp,
+            tp9: sample.tp9,
+            af7: sample.af7,
+            af8: sample.af8,
+            tp10: sample.tp10
+          }))
+        )
+        .execute();
     } catch (error) {
-      LOG.error('Error saving Muse data', error);
+      LOG.error('Error saving raw Muse EEG batch', error);
       throw error;
     }
   }
 
-  // Instance method wrapper for convenience
-  public async saveMuseData(data: MuseData): Promise<void> {
-    return MuseTrackerService.handleMuseData(data);
+  public static async saveMetadataSample(sample: MetadataSample): Promise<void> {
+    try {
+      await MuseMetadataEntity.createQueryBuilder()
+        .insert()
+        .into(MuseMetadataEntity)
+        .values({
+          timestamp: sample.timestamp,
+          batteryLevel: MuseTrackerService.finiteNumberOrUndefined(sample.batteryLevel),
+          hsiTp9: MuseTrackerService.finiteNumberOrUndefined(sample.hsiTp9),
+          hsiAf7: MuseTrackerService.finiteNumberOrUndefined(sample.hsiAf7),
+          hsiAf8: MuseTrackerService.finiteNumberOrUndefined(sample.hsiAf8),
+          hsiTp10: MuseTrackerService.finiteNumberOrUndefined(sample.hsiTp10),
+          signalQuality: MuseTrackerService.finiteNumberOrUndefined(sample.signalQuality)
+        })
+        .execute();
+    } catch (error) {
+      LOG.error('Error saving Muse metadata sample', error);
+      throw error;
+    }
   }
 
-  public async getMostRecentMuseData(itemCount: number): Promise<MuseEntity[]> {
+  public async getLatestMetadata(): Promise<MuseMetadataEntity | null> {
     try {
-      const entities = await MuseEntity.find({
+      const rows = await MuseMetadataEntity.find({
+        order: { timestamp: 'DESC' },
+        take: 1
+      });
+      return rows.length > 0 ? rows[0] : null;
+    } catch (error) {
+      LOG.error('Error retrieving latest Muse metadata', error);
+      return null;
+    }
+  }
+
+  public async getMostRecentRawEegData(itemCount: number): Promise<MuseRawEegEntity[]> {
+    try {
+      const entities = await MuseRawEegEntity.find({
         order: { timestamp: 'DESC' },
         take: itemCount
       });
       return entities;
     } catch (error) {
-      LOG.error('Error retrieving Muse data', error);
+      LOG.error('Error retrieving raw Muse EEG data', error);
       throw error;
     }
   }
 
-  public async getMuseDataByDateRange(startDate: Date, endDate: Date): Promise<MuseEntity[]> {
+  public async getRawEegDataByDateRange(
+    startDate: Date,
+    endDate: Date
+  ): Promise<MuseRawEegEntity[]> {
     try {
-      const entities = await MuseEntity.createQueryBuilder('muse')
+      const entities = await MuseRawEegEntity.createQueryBuilder('muse')
         .where('muse.timestamp BETWEEN :startDate AND :endDate', { startDate, endDate })
         .orderBy('muse.timestamp', 'ASC')
         .getMany();
       return entities;
     } catch (error) {
-      LOG.error('Error retrieving Muse data by date range', error);
+      LOG.error('Error retrieving raw Muse EEG data by date range', error);
       throw error;
     }
   }
 
-  public async getAverageSignalQuality(
-    deviceId: string,
-    timeWindowMs: number = 60000
-  ): Promise<number> {
+  public async getRawEegDataForExport(limit: number = 5000): Promise<MuseRawEegEntity[]> {
     try {
-      const timeThreshold = new Date(Date.now() - timeWindowMs);
-
-      const result = await MuseEntity.createQueryBuilder('muse')
-        .select('AVG(muse.signalQuality)', 'avgQuality')
-        .where('muse.deviceId = :deviceId AND muse.timestamp > :timeThreshold', {
-          deviceId,
-          timeThreshold
-        })
-        .getRawOne();
-
-      return result?.avgQuality ?? 0;
+      const recent = await MuseRawEegEntity.find({ order: { timestamp: 'DESC' }, take: limit });
+      return recent.reverse();
     } catch (error) {
-      LOG.error('Error calculating average signal quality', error);
+      LOG.error('Error retrieving raw Muse EEG data for export', error);
+      throw error;
+    }
+  }
+
+  public async getRawEegTrackedMinutes(): Promise<number> {
+    try {
+      // Count only contiguous recording time.
+      // Large timestamp gaps (e.g. device disconnected) are excluded.
+      const maxGapMs = 5000;
+      const rows = await MuseRawEegEntity.getRepository().query(
+        `
+          SELECT
+            SUM(
+              CASE
+                WHEN prev_ts IS NULL THEN 0
+                WHEN delta_ms <= ? THEN delta_ms
+                ELSE 0
+              END
+            ) AS active_ms
+          FROM (
+            SELECT
+              timestamp AS ts,
+              LAG(timestamp) OVER (ORDER BY timestamp) AS prev_ts,
+              (julianday(timestamp) - julianday(LAG(timestamp) OVER (ORDER BY timestamp))) * 86400000.0 AS delta_ms
+            FROM muse_raw_eeg
+          )
+        `,
+        [maxGapMs]
+      );
+
+      const activeMs = Number(rows?.[0]?.active_ms ?? 0);
+      if (!Number.isFinite(activeMs) || activeMs <= 0) {
+        return 0;
+      }
+
+      return activeMs / 60000;
+    } catch (error) {
+      LOG.error('Error computing raw EEG tracked minutes', error);
       return 0;
     }
   }

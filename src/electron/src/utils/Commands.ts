@@ -45,21 +45,45 @@ type Commands = {
   startAllTrackers: () => void;
   triggerPermissionCheckAccessibility: (prompt: boolean) => boolean;
   triggerPermissionCheckScreenRecording: () => boolean;
-  'muse:get-tracker-status': () => Promise<{
+  'muse:get-tracker-status': (includeDenseData?: boolean) => Promise<{
     isRunning: boolean;
     connectedDevice: {
       name: string;
-      signalQuality: number;
+      signalQuality: number | null;
       battery: number;
-      heartRate: number;
     } | null;
-    latestData: any[];
+    uiSampleIntervalMs: number;
+    latestData: Array<{
+      id: number;
+      timestamp: Date | string;
+      channel1_TP9: number;
+      channel2_AF7: number;
+      channel3_AF8: number;
+      channel4_TP10: number;
+      batteryLevel?: number;
+      signalQuality?: number;
+      hsiTp9?: number;
+      hsiAf7?: number;
+      hsiAf8?: number;
+      hsiTp10?: number;
+      connectionState?: string;
+    }>;
     totalDataPoints: number;
+    trackedMinutes: number;
     averageSignalQuality: number;
   }>;
   'muse:start-tracker': () => Promise<void>;
   'muse:stop-tracker': () => Promise<void>;
-  'muse:get-data-for-export': () => Promise<any[]>;
+  'muse:get-data-for-export': () => Promise<
+    Array<{
+      id: number;
+      timestamp: Date | string;
+      channel1_TP9: number;
+      channel2_AF7: number;
+      channel3_AF8: number;
+      channel4_TP10: number;
+    }>
+  >;
   'muse:get-discovered-devices': () => Promise<
     Array<{ name: string; macAddress: string; rssi: number }>
   >;

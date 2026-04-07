@@ -11,5 +11,9 @@ export enum UsageDataEventType {
   ExperienceSamplingManuallyOpened = 'EXPERIENCE_SAMPLING_MANUALLY_OPENED',
   ExperienceSamplingAutomaticallyOpened = 'EXPERIENCE_SAMPLING_AUTOMATICALLY_OPENED',
   ExperienceSamplingAnswered = 'EXPERIENCE_SAMPLING_ANSWERED',
-  ExperienceSamplingSkipped = 'EXPERIENCE_SAMPLING_SKIPPED'
+  ExperienceSamplingSkipped = 'EXPERIENCE_SAMPLING_SKIPPED',
+  MuseConnectionDropped = 'MUSE_CONNECTION_DROPPED',
+  MuseConnectionRestored = 'MUSE_CONNECTION_RESTORED',
+  NBackWindowCompleted = 'NBACK_WINDOW_COMPLETED',
+  NBackWindowAbandoned = 'NBACK_WINDOW_ABANDONED'
 }

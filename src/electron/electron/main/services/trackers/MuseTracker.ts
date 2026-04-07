@@ -1,6 +1,13 @@
 import { Tracker } from './Tracker';
 import getMainLogger from '../../../config/Logger';
-import { MetadataSample, MuseTrackerService, RawEegSample } from './MuseTrackerService';
+import {
+  MetadataSample,
+  MuseTrackerService,
+  RawEegSample,
+  RawOpticsSample
+} from './MuseTrackerService';
+import { UsageDataService } from '../UsageDataService';
+import { UsageDataEventType } from '../../../enums/UsageDataEventType.enum';
 import { createRequire } from 'module';
 
 const LOG = getMainLogger('MuseTracker');
@@ -72,13 +79,21 @@ export class MuseTracker implements Tracker {
   private museCore: any = null;
   private collectingInterval: number;
   private aggregationTimer: NodeJS.Timeout | null = null;
+  private reconnectTimer: NodeJS.Timeout | null = null;
   private currentDeviceId: string | null = null;
   private currentDeviceName: string | null = null;
+  private targetDeviceId: string | null = null;
   private isConnected: boolean = false;
   private nativeAvailable: boolean = false;
+  private reconnectAttempts: number = 0;
+  private disconnectStartedAtMs: number | null = null;
+  private manualDisconnectRequested: boolean = false;
+  private stopRequested: boolean = false;
 
   // Raw EEG packet buffer (high frequency).
   private eegBuffer: DataPacket[] = [];
+  // Raw optics packet buffer (4ch at 64Hz on PRESET_1035).
+  private opticsBuffer: DataPacket[] = [];
   private lastBatteryLevel: number = 0;
   // HSI values per channel (1=good, 2=mediocre, 4=poor).
   private lastHsiValues: number[] = [4, 4, 4, 4];
@@ -91,10 +106,13 @@ export class MuseTracker implements Tracker {
   // Battery-saving preset for raw EEG collection with quality metadata.
   private readonly MUSE_2025_PRESET = 35; // SDK enum index for PRESET_1035
   private presetConfigured: boolean = false; // Track if we've set the preset (to handle disconnect/reconnect)
+  private expectingPresetReconnect: boolean = false;
+  private readonly RECONNECT_BASE_DELAY_MS = 1500;
+  private readonly RECONNECT_MAX_DELAY_MS = 30000;
 
   constructor(collectingInterval: number = 1000) {
     this.collectingInterval = collectingInterval;
-    LOG.info(`${this.name} created with raw EEG only mode, interval=${collectingInterval}ms`);
+    LOG.info(`${this.name} created with PRESET-1035 active, saving interval=${collectingInterval}ms`);
   }
 
   /** Load native module lazily — only when actually starting the tracker */
@@ -132,7 +150,16 @@ export class MuseTracker implements Tracker {
         this.isConnected = true;
         this.currentDeviceId = packet.macAddress;
         this.currentDeviceName = packet.museName;
+        this.targetDeviceId = packet.macAddress;
+        this.clearReconnectTimer();
+        this.reconnectAttempts = 0;
+        this.manualDisconnectRequested = false;
+        this.stopRequested = false;
         LOG.info(`Successfully connected to ${packet.museName}`);
+
+        if (this.disconnectStartedAtMs !== null) {
+          this.markConnectionRestored();
+        }
 
         // Check if we need to configure the preset
         if (!this.presetConfigured) {
@@ -141,25 +168,50 @@ export class MuseTracker implements Tracker {
           try {
             this.museCore.setPreset(this.MUSE_2025_PRESET);
             this.presetConfigured = true;
+            this.expectingPresetReconnect = true;
             LOG.info('Preset set - device will disconnect and reconnect with PRESET_1035');
           } catch (err) {
             LOG.error('Failed to set preset', err);
             // If preset fails, enable streaming anyway with default preset
             this.presetConfigured = true;
+            this.expectingPresetReconnect = false;
             this.enableStreaming();
           }
         } else {
           // Second connection (after preset applied) - now enable data transmission
+          this.expectingPresetReconnect = false;
           LOG.info('Reconnected with PRESET_1035 - EEG and quality listeners active');
           this.enableStreaming();
         }
       } else if (packet.currentState === ConnectionState.DISCONNECTED) {
+        const wasConnected = this.isConnected;
+        const disconnectedDeviceId = this.currentDeviceId ?? this.targetDeviceId;
+        const disconnectedDeviceName = this.currentDeviceName ?? packet.museName;
         this.isConnected = false;
         this.currentDeviceId = null;
         this.currentDeviceName = null;
-        this.presetConfigured = false; // Reset flag on disconnect
         this.lastSavedMetadata = null;
+        this.clearAllBuffers();
         LOG.info(`Disconnected from ${packet.museName}`);
+
+        if (this.expectingPresetReconnect) {
+          LOG.info('Disconnect expected while applying PRESET_1035, waiting for automatic reconnect');
+          return;
+        }
+
+        if (this.stopRequested || this.manualDisconnectRequested) {
+          LOG.info('Disconnect was requested by app, skipping auto-reconnect');
+          this.clearReconnectTimer();
+          this.disconnectStartedAtMs = null;
+          this.reconnectAttempts = 0;
+          this.manualDisconnectRequested = false;
+          return;
+        }
+
+        if (wasConnected) {
+          this.markConnectionDropped('unexpected_disconnect', disconnectedDeviceId, disconnectedDeviceName);
+        }
+        this.scheduleReconnect('unexpected_disconnect');
       } else if (packet.currentState === ConnectionState.CONNECTING) {
         LOG.info(`Connecting to ${packet.museName}...`);
       }
@@ -168,6 +220,10 @@ export class MuseTracker implements Tracker {
     // EEG data
     this.museCore.on('eegData', (packet: DataPacket) => {
       this.eegBuffer.push({ ...packet, receivedAtMs: Date.now() });
+    });
+
+    this.museCore.on('opticsData', (packet: DataPacket) => {
+      this.opticsBuffer.push({ ...packet, receivedAtMs: Date.now() });
     });
 
     // Keep battery + HSI quality metadata because it is still valuable for raw EEG quality checks.
@@ -223,7 +279,7 @@ export class MuseTracker implements Tracker {
   private enableStreaming(): void {
     try {
       this.museCore.startStreaming();
-      LOG.info('Data transmission enabled (EEG + quality metadata)');
+      LOG.info('Data transmission enabled (EEG + optics + quality metadata)');
     } catch (err) {
       LOG.error('Failed to enable data transmission', err);
     }
@@ -237,6 +293,10 @@ export class MuseTracker implements Tracker {
 
     try {
       LOG.info(`Starting ${this.name}...`);
+      this.stopRequested = false;
+      this.manualDisconnectRequested = false;
+      this.clearReconnectTimer();
+      this.reconnectAttempts = 0;
 
       // Load native module on first start (deferred from constructor)
       this.ensureNativeLoaded();
@@ -282,6 +342,8 @@ export class MuseTracker implements Tracker {
 
     try {
       LOG.info(`Stopping ${this.name}...`);
+      this.stopRequested = true;
+      this.clearReconnectTimer();
 
       // Stop aggregation timer
       if (this.aggregationTimer) {
@@ -299,9 +361,14 @@ export class MuseTracker implements Tracker {
 
       // Reset preset flag for next connection
       this.presetConfigured = false;
+      this.expectingPresetReconnect = false;
       this.lastSavedMetadata = null;
       this.savedSamplesSinceProgressLog = 0;
       this.lastSaveProgressLogMs = 0;
+      this.disconnectStartedAtMs = null;
+      this.reconnectAttempts = 0;
+      this.manualDisconnectRequested = false;
+      this.targetDeviceId = null;
 
       this.isRunning = false;
       LOG.info(`${this.name} stopped successfully`);
@@ -320,6 +387,10 @@ export class MuseTracker implements Tracker {
 
     try {
       LOG.info(`Attempting to connect to device: ${macAddress}`);
+      this.targetDeviceId = macAddress;
+      this.stopRequested = false;
+      this.manualDisconnectRequested = false;
+      this.clearReconnectTimer();
 
       // Check if device was discovered
       const devices = this.museCore.getDiscoveredDevices();
@@ -348,14 +419,131 @@ export class MuseTracker implements Tracker {
 
     try {
       LOG.info('Disconnecting from device...');
+      this.manualDisconnectRequested = true;
+      this.clearReconnectTimer();
       this.museCore.disconnect();
       this.isConnected = false;
       this.currentDeviceId = null;
       this.currentDeviceName = null;
       this.presetConfigured = false; // Reset for next connection
+      this.expectingPresetReconnect = false;
+      this.disconnectStartedAtMs = null;
+      this.reconnectAttempts = 0;
     } catch (error) {
       LOG.error('Failed to disconnect device', error);
     }
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  private scheduleReconnect(reason: string): void {
+    if (!this.isRunning || !this.nativeAvailable || !this.museCore || this.isConnected) {
+      return;
+    }
+
+    if (this.stopRequested || this.manualDisconnectRequested) {
+      return;
+    }
+
+    const targetMacAddress = this.targetDeviceId;
+    if (!targetMacAddress) {
+      LOG.warn('Muse reconnect skipped: no target device id is available');
+      return;
+    }
+
+    this.clearReconnectTimer();
+
+    const attemptNumber = this.reconnectAttempts + 1;
+    const delay = Math.min(
+      this.RECONNECT_MAX_DELAY_MS,
+      this.RECONNECT_BASE_DELAY_MS * Math.pow(2, Math.max(0, attemptNumber - 1))
+    );
+
+    LOG.warn(
+      `Muse disconnected (${reason}). Scheduling reconnect attempt ${attemptNumber} in ${delay}ms`
+    );
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.performReconnectAttempt(targetMacAddress);
+    }, delay);
+  }
+
+  private async performReconnectAttempt(targetMacAddress: string): Promise<void> {
+    if (!this.isRunning || !this.nativeAvailable || !this.museCore || this.isConnected) {
+      return;
+    }
+
+    if (this.stopRequested || this.manualDisconnectRequested) {
+      return;
+    }
+
+    const attemptNumber = this.reconnectAttempts + 1;
+    this.reconnectAttempts = attemptNumber;
+
+    try {
+      LOG.info(`Attempting Muse reconnect #${attemptNumber} to ${targetMacAddress}`);
+      await this.museCore.connect(targetMacAddress);
+
+      if (!this.isConnected) {
+        this.scheduleReconnect('connect_pending');
+      }
+    } catch (error) {
+      LOG.warn(`Muse reconnect attempt #${attemptNumber} failed`, error);
+      this.scheduleReconnect('connect_failed');
+    }
+  }
+
+  private markConnectionDropped(
+    reason: string,
+    deviceId: string | null,
+    deviceName: string | null
+  ): void {
+    if (this.disconnectStartedAtMs !== null) {
+      return;
+    }
+
+    this.disconnectStartedAtMs = Date.now();
+
+    const payload = {
+      reason,
+      droppedAt: new Date(this.disconnectStartedAtMs).toISOString(),
+      deviceId,
+      deviceName
+    };
+
+    void UsageDataService.createNewUsageDataEvent(
+      UsageDataEventType.MuseConnectionDropped,
+      JSON.stringify(payload)
+    );
+  }
+
+  private markConnectionRestored(): void {
+    if (this.disconnectStartedAtMs === null) {
+      return;
+    }
+
+    const restoredAtMs = Date.now();
+    const payload = {
+      droppedAt: new Date(this.disconnectStartedAtMs).toISOString(),
+      restoredAt: new Date(restoredAtMs).toISOString(),
+      outageDurationMs: restoredAtMs - this.disconnectStartedAtMs,
+      reconnectAttempts: this.reconnectAttempts,
+      deviceId: this.targetDeviceId,
+      deviceName: this.currentDeviceName
+    };
+
+    this.disconnectStartedAtMs = null;
+
+    void UsageDataService.createNewUsageDataEvent(
+      UsageDataEventType.MuseConnectionRestored,
+      JSON.stringify(payload)
+    );
   }
 
   /**
@@ -450,16 +638,25 @@ export class MuseTracker implements Tracker {
 
     try {
       const rawEegSamples = this.extractRawEegSamples();
-      if (rawEegSamples.length > 0) {
-        await MuseTrackerService.saveRawEegBatch(rawEegSamples);
-        await this.saveMetadataOnChange(rawEegSamples[rawEegSamples.length - 1].timestamp);
+      const rawOpticsSamples = this.extractRawOpticsSamples();
+
+      if (rawEegSamples.length > 0 || rawOpticsSamples.length > 0) {
+        await Promise.all([
+          MuseTrackerService.saveRawEegBatch(rawEegSamples),
+          MuseTrackerService.saveRawOpticsBatch(rawOpticsSamples)
+        ]);
+
+        if (rawEegSamples.length > 0) {
+          await this.saveMetadataOnChange(rawEegSamples[rawEegSamples.length - 1].timestamp);
+        }
+
         this.savedSamplesSinceProgressLog += rawEegSamples.length;
 
         const now = Date.now();
         const elapsedMs = now - this.lastSaveProgressLogMs;
         if (elapsedMs >= this.SAVE_PROGRESS_LOG_INTERVAL_MS) {
           LOG.info(
-            `Saving active: ${this.savedSamplesSinceProgressLog} raw EEG samples persisted in the last ${Math.round(elapsedMs / 1000)}s`
+            `Saving active: ${this.savedSamplesSinceProgressLog} raw EEG samples and ${rawOpticsSamples.length} raw optics samples persisted in the last ${Math.round(elapsedMs / 1000)}s`
           );
           this.savedSamplesSinceProgressLog = 0;
           this.lastSaveProgressLogMs = now;
@@ -569,8 +766,46 @@ export class MuseTracker implements Tracker {
     return samples;
   }
 
+  private extractRawOpticsSamples(): RawOpticsSample[] {
+    if (!this.isConnected) {
+      return [];
+    }
+
+    const samples: RawOpticsSample[] = [];
+
+    for (const packet of this.opticsBuffer) {
+      const channels = packet.channels as any;
+      const values = packet.values;
+
+      const ch0 = channels?.ch0 ?? values?.[0];
+      const ch1 = channels?.ch1 ?? values?.[1];
+      const ch2 = channels?.ch2 ?? values?.[2];
+      const ch3 = channels?.ch3 ?? values?.[3];
+
+      if (![ch0, ch1, ch2, ch3].every((value) => typeof value === 'number' && Number.isFinite(value))) {
+        continue;
+      }
+
+      const receivedAtMs =
+        typeof packet.receivedAtMs === 'number' && Number.isFinite(packet.receivedAtMs)
+          ? packet.receivedAtMs
+          : Date.now();
+
+      samples.push({
+        timestamp: new Date(receivedAtMs),
+        ch0,
+        ch1,
+        ch2,
+        ch3
+      });
+    }
+
+    return samples;
+  }
+
   private clearAllBuffers(): void {
     this.eegBuffer = [];
+    this.opticsBuffer = [];
   }
 
   /**

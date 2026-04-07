@@ -46,6 +46,7 @@ jobs:
           fi
         env:
           MAC_ARCH_TYPE: ${{ matrix.mac_arch == 'arm64' && 'AppleSilicon' || 'Intel' }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

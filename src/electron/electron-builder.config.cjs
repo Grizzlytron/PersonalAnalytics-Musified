@@ -1,7 +1,7 @@
 const enableAzureSigning = process.env.ENABLE_AZURE_SIGNING === 'true';
 
 module.exports = {
-  productName: 'PersonalAnalytics',
+  productName: 'PersonalAnalytics (Musified)',
   appId: 'ch.ifi.hasel.personal-analytics',
   asar: true,
   asarUnpack: ['node_modules/better_sqlite3/**', 'node_modules/sqlite3/**'],
@@ -12,7 +12,7 @@ module.exports = {
   publish: {
     provider: 'github',
     owner: 'Grizzlytron',
-    repo: 'PersonalAnalytics'
+    repo: 'Muselytics'
   },
   afterSign: 'scripts/notarize.cjs',
   mac: {

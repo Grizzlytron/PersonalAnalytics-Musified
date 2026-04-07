@@ -6,19 +6,35 @@ import WindowActivityDto from '../../shared/dto/WindowActivityDto';
 import ExperienceSamplingDto from '../../shared/dto/ExperienceSamplingDto';
 import { WorkHoursDto } from '../../shared/dto/WorkHoursDto';
 import { Settings } from 'electron/main';
+import type { NBackTaskBlockDto } from '../../shared/dto/NBackTaskBlockDto';
 
 type Commands = {
   createExperienceSample: (
     promptedAt: Date,
-    question: string,
-    responseOptions: string,
+    question1: string,
+    responseOptions1: string,
+    question2: string,
+    responseOptions2: string,
     scale: number,
-    response?: number,
+    response1?: number,
+    response2?: number,
     skipped?: boolean
   ) => Promise<void>;
   closeExperienceSamplingWindow: (skippedExperienceSampling: boolean) => void;
+  openNBackWindow: () => Promise<void>;
+  closeNBackWindow: (source?: string) => void;
+  setNBackSessionContext: (context: {
+    sessionId?: string;
+    workflowState?: string;
+    currentTaskIndex?: number;
+    currentLevel?: string;
+    randomizedLevelOrder?: string[];
+    remainingLevels?: string[];
+    abandoned?: boolean;
+  }) => void;
   closeOnboardingWindow: () => void;
   closeDataExportWindow: () => void;
+  saveNBackTaskBlock: (payload: NBackTaskBlockDto) => Promise<void>;
   getStudyInfo: () => Promise<StudyInfoDto>;
   getWorkHours: () => Promise<WorkHoursDto>;
   setWorkHours: (schedule: WorkHoursDto) => Promise<void>;
@@ -74,16 +90,18 @@ type Commands = {
   }>;
   'muse:start-tracker': () => Promise<void>;
   'muse:stop-tracker': () => Promise<void>;
-  'muse:get-data-for-export': () => Promise<
-    Array<{
+  'muse:get-data-for-export': () => Promise<{
+    data: Array<{
       id: number;
       timestamp: Date | string;
       channel1_TP9: number;
       channel2_AF7: number;
       channel3_AF8: number;
       channel4_TP10: number;
-    }>
-  >;
+    }>;
+    totalDataPoints: number;
+    previewLimit: number;
+  }>;
   'muse:get-discovered-devices': () => Promise<
     Array<{ name: string; macAddress: string; rssi: number }>
   >;

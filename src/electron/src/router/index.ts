@@ -14,6 +14,11 @@ const router: Router = createRouter({
       component: () => import('../views/MuseView.vue')
     },
     {
+      path: '/n-back',
+      name: 'NBack',
+      component: () => import('../views/NBackView.vue')
+    },
+    {
       path: '/onboarding',
       name: 'Onboarding',
       component: () => import('../views/OnboardingView.vue'),

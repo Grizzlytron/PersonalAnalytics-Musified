@@ -10,9 +10,17 @@ export class UsageDataService {
     additionalInformation?: string
   ): Promise<void> {
     LOG.debug(`Creating new usage data event of type ${type}`);
-    await UsageDataEntity.save({
-      type,
-      additionalInformation
-    });
+    const now = new Date();
+
+    try {
+      await UsageDataEntity.save({
+        type,
+        additionalInformation,
+        createdAt: now,
+        updatedAt: now
+      });
+    } catch (error) {
+      LOG.error(`Failed to persist usage data event of type ${type}`, error);
+    }
   }
 }

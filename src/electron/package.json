@@ -1,7 +1,7 @@
 {
   "name": "muselytics",
   "description": "Muselytics is a privacy-protecting, open-source self-monitoring software extended with Muse tracking and biometric data collection",
-  "version": "2.0.1",
+  "version": "1.0.0",
   "main": "dist-electron/main/index.js",
   "type": "module",
   "author": {

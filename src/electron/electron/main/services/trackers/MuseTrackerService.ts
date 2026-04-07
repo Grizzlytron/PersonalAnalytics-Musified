@@ -1,4 +1,5 @@
 import { MuseRawEegEntity } from '../../entities/MuseRawEegEntity';
+import { MuseRawOpticsEntity } from '../../entities/MuseRawOpticsEntity';
 import { MuseMetadataEntity } from '../../entities/MuseMetadataEntity';
 import getMainLogger from '../../../config/Logger';
 
@@ -10,6 +11,14 @@ export interface RawEegSample {
   af7: number;
   af8: number;
   tp10: number;
+}
+
+export interface RawOpticsSample {
+  timestamp: Date;
+  ch0: number;
+  ch1: number;
+  ch2: number;
+  ch3: number;
 }
 
 export interface MetadataSample {
@@ -48,6 +57,31 @@ export class MuseTrackerService {
         .execute();
     } catch (error) {
       LOG.error('Error saving raw Muse EEG batch', error);
+      throw error;
+    }
+  }
+
+  public static async saveRawOpticsBatch(samples: RawOpticsSample[]): Promise<void> {
+    if (samples.length === 0) {
+      return;
+    }
+
+    try {
+      await MuseRawOpticsEntity.createQueryBuilder()
+        .insert()
+        .into(MuseRawOpticsEntity)
+        .values(
+          samples.map((sample) => ({
+            timestamp: sample.timestamp,
+            ch0: sample.ch0,
+            ch1: sample.ch1,
+            ch2: sample.ch2,
+            ch3: sample.ch3
+          }))
+        )
+        .execute();
+    } catch (error) {
+      LOG.error('Error saving raw Muse optics batch', error);
       throw error;
     }
   }

@@ -29,7 +29,7 @@
 
       <div class="mb-4">
         <p class="mb-2 text-sm text-base-content/60">Total Data Points: {{ totalDataPoints }}</p>
-        <p class="text-xs text-base-content/50">Showing latest preview records</p>
+        <p class="text-xs text-base-content/50">Showing first 100 data points</p>
       </div>
 
       <div class="max-h-96 w-full overflow-y-auto">
@@ -55,9 +55,6 @@
         </table>
       </div>
 
-      <div v-if="data.length > maxDisplayed" class="mt-2 text-center text-sm text-base-content/60">
-        Showing {{ maxDisplayed }} of {{ data.length }} records
-      </div>
     </div>
 
     <div class="mt-4 rounded-lg bg-base-100 p-4">
@@ -97,6 +94,7 @@ const emit = defineEmits<{
 const selectedOption = ref(props.shouldShare ? DataExportType.All : DataExportType.None);
 const data = ref<MuseData[]>([]);
 const maxDisplayed = ref(100);
+const totalDataPoints = ref(0);
 
 onMounted(async () => {
   await loadData();
@@ -104,10 +102,6 @@ onMounted(async () => {
 
 const displayedData = computed(() => {
   return data.value.slice(0, maxDisplayed.value);
-});
-
-const totalDataPoints = computed(() => {
-  return data.value.length;
 });
 
 const dateRange = computed(() => {
@@ -120,10 +114,18 @@ const dateRange = computed(() => {
 async function loadData() {
   try {
     const result = await typedIpcRenderer.invoke('muse:get-data-for-export');
-    data.value = (result || []).map((d: any) => ({
+    const payload = Array.isArray(result)
+      ? { data: result, totalDataPoints: result.length }
+      : {
+          data: result?.data ?? [],
+          totalDataPoints: result?.totalDataPoints ?? 0
+        };
+
+    data.value = payload.data.map((d: any) => ({
       ...d,
       timestamp: new Date(d.timestamp)
     }));
+    totalDataPoints.value = payload.totalDataPoints;
   } catch (error) {
     console.error('Error loading Muse data for export:', error);
   }

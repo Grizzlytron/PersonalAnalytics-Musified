@@ -11,6 +11,9 @@
           <div class="badge badge-lg" :class="isTrackerRunning ? 'badge-success' : 'badge-error'">
             {{ isTrackerRunning ? '● Active' : '○ Inactive' }}
           </div>
+          <div class="badge badge-lg" :class="signalQualityBadgeClass">
+            Signal: {{ signalQualityLabel }}
+          </div>
           <div v-if="connectedDevice" class="badge badge-info badge-lg">
             🔋 {{ connectedDevice.battery || 0 }}%
           </div>
@@ -53,7 +56,7 @@
       <!-- Connection Tab -->
       <div v-else-if="activeTab === 'connection'" class="flex flex-col gap-3 pb-2">
         <!-- Status Cards -->
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div class="stat min-w-0 overflow-hidden rounded-xl bg-base-200 shadow">
             <div class="stat-figure text-primary">
               <svg
@@ -99,31 +102,6 @@
             <div class="stat-title">Tracked Minutes</div>
             <div class="stat-value truncate text-base sm:text-lg">
               {{ Math.floor(trackedMinutes).toLocaleString() }}
-            </div>
-          </div>
-          <div class="stat min-w-0 overflow-hidden rounded-xl bg-base-200 shadow">
-            <div class="stat-figure text-info">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="h-8 w-8"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </div>
-            <div class="stat-title">Signal Quality</div>
-            <div
-              class="stat-value truncate text-base sm:text-lg"
-              :class="connectedDevice ? signalQualityColor : ''"
-            >
-              {{ connectedDevice ? signalQualityLabel : '--' }}
             </div>
           </div>
         </div>
@@ -330,7 +308,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="data in latestData.slice(-10)" :key="data.id" class="hover">
+                  <tr v-for="data in recentReadings" :key="data.id" class="hover">
                     <td>{{ formatTimestamp(data.timestamp) }}</td>
                     <td>{{ formatNumber(data.channel1_TP9) }}</td>
                     <td>{{ formatNumber(data.channel2_AF7) }}</td>
@@ -446,12 +424,16 @@ const discoveredDevices = ref<Array<{ name: string; macAddress: string; rssi: nu
 const selectedDeviceMac = ref<string>('');
 const isConnecting = ref(false);
 const eegWindowAnchorMs = ref<number | null>(null);
+const nowMs = ref(Date.now());
 let refreshInterval: ReturnType<typeof setInterval> | null = null;
 let lastDataHash = ''; // track whether EEG data actually changed
 
 const CHART_PAGE_SECONDS = 30;
 const EEG_REFRESH_MS = 2000;
 const NON_EEG_REFRESH_MS = 8000;
+const EEG_DISPLAY_MIN_UV = 0;
+const EEG_DISPLAY_MAX_UV = 1000;
+const SIGNAL_RECENT_WINDOW_MS = 5000;
 
 // Filter out connected device from discovered devices list
 const availableDevices = computed(() => {
@@ -463,24 +445,67 @@ const availableDevices = computed(() => {
 
 const latestQualitySample = computed(() => {
   if (latestData.value.length === 0) return null;
-  return latestData.value[latestData.value.length - 1];
+  return latestData.value[latestData.value.length - 1] ?? null;
+});
+
+const recentReadings = computed(() => {
+  if (latestData.value.length === 0) {
+    return [];
+  }
+  return latestData.value.slice(-10).reverse();
+});
+
+const latestHsiMax = computed<number | null>(() => {
+  const sample = latestQualitySample.value;
+  if (!sample) return null;
+
+  const hsiValues = [sample.hsiTp9, sample.hsiAf7, sample.hsiAf8, sample.hsiTp10].filter(
+    (v): v is number => typeof v === 'number' && Number.isFinite(v)
+  );
+
+  if (hsiValues.length === 0) return null;
+  return Math.max(...hsiValues);
+});
+
+const hasRecentSignal = computed(() => {
+  const sample = latestQualitySample.value;
+  if (!sample) return false;
+
+  const sampleTime = new Date(sample.timestamp).getTime();
+  if (!Number.isFinite(sampleTime)) return false;
+
+  return nowMs.value - sampleTime <= SIGNAL_RECENT_WINDOW_MS;
 });
 
 // Signal quality descriptive labels (HSI: 1=good, 2=mediocre, 4=poor)
 const signalQualityLabel = computed(() => {
-  const q = connectedDevice.value?.signalQuality;
+  if (!hasRecentSignal.value) return 'N/A';
+
+  const q = latestHsiMax.value ?? connectedDevice.value?.signalQuality ?? null;
   if (q === null || q === undefined || q <= 0) return 'N/A';
   if (q <= 1) return 'Good';
   if (q <= 2) return 'Mediocre';
-  return 'Poor';
+  return 'Bad';
 });
 
 const signalQualityColor = computed(() => {
-  const q = connectedDevice.value?.signalQuality;
+  if (!hasRecentSignal.value) return 'text-base-content/50';
+
+  const q = latestHsiMax.value ?? connectedDevice.value?.signalQuality ?? null;
   if (q === null || q === undefined || q <= 0) return 'text-base-content/50';
   if (q <= 1) return 'text-success';
   if (q <= 2) return 'text-warning';
   return 'text-error';
+});
+
+const signalQualityBadgeClass = computed(() => {
+  if (!hasRecentSignal.value) return 'badge-ghost';
+
+  const q = latestHsiMax.value ?? connectedDevice.value?.signalQuality ?? null;
+  if (q === null || q === undefined || q <= 0) return 'badge-ghost';
+  if (q <= 1) return 'badge-success';
+  if (q <= 2) return 'badge-warning';
+  return 'badge-error';
 });
 
 const signalQualityProgressClass = computed(() => {
@@ -492,10 +517,7 @@ const signalQualityProgressClass = computed(() => {
 });
 
 const eegWindowState = computed(() => {
-  const dataSorted = [...latestData.value].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
-  if (dataSorted.length === 0) {
+  if (latestData.value.length === 0) {
     return {
       anchorTs: Date.now(),
       latestTs: Date.now(),
@@ -504,8 +526,8 @@ const eegWindowState = computed(() => {
     };
   }
 
-  const firstTs = new Date(dataSorted[0].timestamp).getTime();
-  const latestTs = new Date(dataSorted[dataSorted.length - 1].timestamp).getTime();
+  const firstTs = new Date(latestData.value[0].timestamp).getTime();
+  const latestTs = new Date(latestData.value[latestData.value.length - 1].timestamp).getTime();
   const anchorTs = eegWindowAnchorMs.value ?? firstTs;
   const elapsedMs = Math.max(0, latestTs - anchorTs);
   const isRolling = elapsedMs >= CHART_PAGE_SECONDS * 1000;
@@ -522,11 +544,7 @@ const eegWindowIsRolling = computed(() => eegWindowState.value.isRolling);
 
 // Chart data for EEG
 const eegChartData = computed(() => {
-  const dataSorted = [...latestData.value].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
-
-  if (dataSorted.length === 0) {
+  if (latestData.value.length === 0) {
     return { labels: [], datasets: [] };
   }
 
@@ -535,7 +553,7 @@ const eegChartData = computed(() => {
   const anchorTs = eegWindowState.value.anchorTs;
   const pageStartTs = eegWindowIsRolling.value ? latestTs - pageMs : anchorTs;
 
-  const pageData = dataSorted.filter((d) => {
+  const pageData = latestData.value.filter((d) => {
     const ts = new Date(d.timestamp).getTime();
     return ts >= pageStartTs && ts <= latestTs;
   });
@@ -592,16 +610,6 @@ const eegChartData = computed(() => {
 });
 
 const eegChartOptions = computed(() => {
-  const values = latestData.value
-    .slice(-300)
-    .flatMap((d) => [d.channel1_TP9, d.channel2_AF7, d.channel3_AF8, d.channel4_TP10])
-    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
-
-  const minVal = values.length > 0 ? Math.min(...values) : undefined;
-  const maxVal = values.length > 0 ? Math.max(...values) : undefined;
-  const range =
-    minVal !== undefined && maxVal !== undefined ? Math.max(10, (maxVal - minVal) * 0.2) : undefined;
-
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -626,8 +634,11 @@ const eegChartOptions = computed(() => {
       y: {
         display: true,
         title: { display: true, text: 'Amplitude (uV)' },
-        suggestedMin: minVal !== undefined && range !== undefined ? minVal - range : undefined,
-        suggestedMax: maxVal !== undefined && range !== undefined ? maxVal + range : undefined
+        min: EEG_DISPLAY_MIN_UV,
+        max: EEG_DISPLAY_MAX_UV,
+        ticks: {
+          stepSize: 100
+        }
       }
     },
     plugins: {
@@ -669,6 +680,8 @@ function startPolling() {
 
 async function loadData() {
   try {
+    nowMs.value = Date.now();
+
     const includeDenseData = activeTab.value === 'eeg';
     const data = await typedIpcRenderer.invoke('muse:get-tracker-status', includeDenseData);
     if (data) {

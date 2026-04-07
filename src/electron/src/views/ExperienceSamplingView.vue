@@ -1,61 +1,140 @@
 <script lang="ts" setup>
 import typedIpcRenderer from '../utils/typedIpcRenderer';
 import studyConfig from '../../shared/study.config';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+
+type PopupQuestion = {
+  question: string;
+  labels: string[];
+};
 
 const esConfig = studyConfig.trackers.experienceSamplingTracker;
-const studyQuestions = esConfig.questions;
-
-const randomQuestionNr = Math.floor(Math.random() * studyQuestions.length);
-const question = esConfig.questions[randomQuestionNr];
-const questionLabels = esConfig.responseOptions[randomQuestionNr];
 const scale = Array.from({ length: esConfig.scale }, (_, i) => i + 1);
+const zurichTimeZone = 'Europe/Zurich';
 
 const language =
   (typeof navigator !== 'undefined' &&
     (navigator.language || (navigator.languages && navigator.languages[0]))) ||
   'en';
 
+function pickTwoQuestions(): PopupQuestion[] {
+  const available = esConfig.questions.map((questionText, index) => ({
+    question: questionText,
+    labels: esConfig.responseOptions[index] ?? []
+  }));
+
+  const uniqueConfiguredQuestions: PopupQuestion[] = [];
+  const seenQuestions = new Set<string>();
+
+  for (const question of available) {
+    const key = question.question.trim().toLowerCase();
+    if (key.length === 0 || seenQuestions.has(key)) {
+      continue;
+    }
+    seenQuestions.add(key);
+    uniqueConfiguredQuestions.push(question);
+  }
+
+  if (uniqueConfiguredQuestions.length >= 2) {
+    // Always use the two configured questions in definition order.
+    return [uniqueConfiguredQuestions[0], uniqueConfiguredQuestions[1]];
+  }
+
+  if (uniqueConfiguredQuestions.length === 1) {
+    return [
+      uniqueConfiguredQuestions[0],
+      {
+        question: 'How much effort did you put in during the previous session?',
+        labels: ['not much effort', 'moderately much effort', 'very much effort']
+      }
+    ];
+  }
+
+  if (available.length === 0) {
+    return [
+      {
+        question: 'How focused did you feel in the previous session?',
+        labels: ['not focused', 'moderately focused', 'very focused']
+      },
+      {
+        question: 'How well did you spend your time in the previous session?',
+        labels: ['not well', 'moderately well', 'very well']
+      }
+    ];
+  }
+
+  return [available[0], available[1] ?? available[0]];
+}
+
+const selectedQuestions = pickTwoQuestions();
+const currentQuestionIndex = ref(0);
+const responses = ref<Array<number | undefined>>([]);
+
+const activeQuestion = computed(() => selectedQuestions[currentQuestionIndex.value] ?? selectedQuestions[0]);
+const questionProgressLabel = computed(
+  () => `${Math.min(currentQuestionIndex.value + 1, selectedQuestions.length)} / ${selectedQuestions.length}`
+);
+
 const promptedAt = new Date();
 const promptedAtString = new Intl.DateTimeFormat(language, {
+  timeZone: zurichTimeZone,
   hour: '2-digit',
   minute: '2-digit',
   hour12: false,
   hourCycle: 'h23'
 }).format(promptedAt);
 
-const sampleLoadingValue = ref<number | null>();
+const sampleLoadingValue = ref<number | null | undefined>(undefined);
 
-async function createExperienceSample(value: number) {
+async function submitResponse(value: number) {
   sampleLoadingValue.value = value;
+  responses.value[currentQuestionIndex.value] = value;
+
+  if (currentQuestionIndex.value < selectedQuestions.length - 1) {
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    currentQuestionIndex.value += 1;
+    sampleLoadingValue.value = undefined;
+    return;
+  }
+
+  const firstQuestion = selectedQuestions[0];
+  const secondQuestion = selectedQuestions[1] ?? selectedQuestions[0];
   try {
     await Promise.all([
       typedIpcRenderer.invoke(
         'createExperienceSample',
         promptedAt,
-        question,
-        questionLabels.join(', '),
+        firstQuestion.question,
+        firstQuestion.labels.join(', '),
+        secondQuestion.question,
+        secondQuestion.labels.join(', '),
         esConfig.scale,
-        value
+        responses.value[0],
+        responses.value[1]
       ),
       new Promise((resolve) => setTimeout(resolve, 150))
     ]);
     await typedIpcRenderer.invoke('closeExperienceSamplingWindow', false);
   } catch (error) {
-    console.error('Error creating team', error);
+    console.error('Error creating experience sample', error);
   }
 }
 
 async function skipExperienceSample() {
   sampleLoadingValue.value = null;
+  const firstQuestion = selectedQuestions[0];
+  const secondQuestion = selectedQuestions[1] ?? selectedQuestions[0];
   try {
     await Promise.all([
       typedIpcRenderer.invoke(
         'createExperienceSample',
         promptedAt,
-        question,
-        questionLabels.join(', '),
+        firstQuestion.question,
+        firstQuestion.labels.join(', '),
+        secondQuestion.question,
+        secondQuestion.labels.join(', '),
         esConfig.scale,
+        undefined,
         undefined,
         true
       ),
@@ -63,7 +142,7 @@ async function skipExperienceSample() {
     ]);
     await typedIpcRenderer.invoke('closeExperienceSamplingWindow', true);
   } catch (error) {
-    console.error('Error creating team', error);
+    console.error('Error creating experience sample', error);
   }
 }
 </script>
@@ -76,13 +155,14 @@ async function skipExperienceSample() {
     <div class="pointer-events-auto flex flex-1 flex-row">
       <div class="flex-1 p-4 pt-1">
         <div class="flex-1">
-          <p class="prompt">{{ question }}</p>
+          <p class="text-xs text-gray-400">Self-Reflection {{ questionProgressLabel }}</p>
+          <p class="prompt">{{ activeQuestion.question }}</p>
           <div class="-mx-1 mt-2 flex flex-row justify-between">
             <div
               v-for="value in scale"
               :key="value"
               class="sample-answer"
-              @click="createExperienceSample(value)"
+              @click="submitResponse(value)"
             >
               <span v-if="sampleLoadingValue !== value" class="mx-auto flex font-medium">
                 {{ value }}
@@ -93,11 +173,13 @@ async function skipExperienceSample() {
             </div>
           </div>
           <div class="mt-1 flex flex-row text-sm text-gray-400">
-            <div class="basis-1/3">{{ questionLabels[0] }}</div>
+            <div class="basis-1/3">{{ activeQuestion.labels[0] }}</div>
             <div class="basis-1/3 text-center">
-              <span v-if="questionLabels.length === 3">{{ questionLabels[1] }}</span>
+              <span v-if="activeQuestion.labels.length === 3">{{ activeQuestion.labels[1] }}</span>
             </div>
-            <div class="basis-1/3 text-right">{{ questionLabels[2] || questionLabels[1] }}</div>
+            <div class="basis-1/3 text-right">
+              {{ activeQuestion.labels[2] || activeQuestion.labels[1] }}
+            </div>
           </div>
         </div>
       </div>

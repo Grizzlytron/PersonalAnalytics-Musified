@@ -24,6 +24,23 @@ import { Settings } from '../entities/Settings';
 
 const LOG = getMainLogger('WindowService');
 
+type NBackCloseSource =
+  | 'unknown'
+  | 'renderer-close'
+  | 'menu-close'
+  | 'window-close-button'
+  | 'alt-f4';
+
+type NBackSessionContext = {
+  sessionId?: string;
+  workflowState?: string;
+  currentTaskIndex?: number;
+  currentLevel?: string;
+  randomizedLevelOrder?: string[];
+  remainingLevels?: string[];
+  abandoned?: boolean;
+};
+
 export class WindowService {
   private readonly appUpdaterService: AppUpdaterService;
   private tray: Tray;
@@ -32,6 +49,9 @@ export class WindowService {
   private dataExportWindow: BrowserWindow;
   private settingsWindow: BrowserWindow;
   private MuseWindow: BrowserWindow;
+  private nBackWindow: BrowserWindow;
+  private nBackCloseSource: NBackCloseSource = 'unknown';
+  private nBackSessionContext: NBackSessionContext = {};
 
   private hasOpenedDataExportUrl: boolean = false;
   private hasRevealedDataEportFolder: boolean = false;
@@ -56,6 +76,11 @@ export class WindowService {
   }
 
   public async createExperienceSamplingWindow(isManuallyTriggered: boolean = false) {
+    if (this.isNBackWindowOpen()) {
+      LOG.info('Skipping self-reflection popup because N-Back interface is open.');
+      return;
+    }
+
     if (this.experienceSamplingWindow) {
       this.experienceSamplingWindow.close();
       this.experienceSamplingWindow = null;
@@ -90,7 +115,7 @@ export class WindowService {
       fullscreenable: false,
       resizable: false,
       acceptFirstMouse: true,
-      title: 'Muselytics: Self-Reflection',
+      title: 'PersonalAnalytics: Self-Reflection',
       webPreferences: {
         preload
       }
@@ -153,7 +178,7 @@ export class WindowService {
       maximizable: false,
       fullscreenable: false,
       resizable: false,
-      title: 'Muselytics: Settings',
+      title: 'PersonalAnalytics: Settings',
       webPreferences: {
         preload
       }
@@ -202,7 +227,7 @@ export class WindowService {
       maximizable: false,
       fullscreenable: false,
       resizable: false,
-      title: 'Muselytics: Onboarding',
+      title: 'PersonalAnalytics: Onboarding',
       webPreferences: {
         preload
       }
@@ -255,6 +280,25 @@ export class WindowService {
     }
   }
 
+  public closeNBackWindow(source: string = 'unknown') {
+    this.nBackCloseSource = this.normalizeNBackCloseSource(source);
+    if (this.nBackWindow) {
+      this.nBackWindow?.close();
+      this.nBackWindow = null;
+    }
+  }
+
+  public setNBackSessionContext(context: NBackSessionContext): void {
+    this.nBackSessionContext = {
+      ...this.nBackSessionContext,
+      ...context
+    };
+  }
+
+  public isNBackWindowOpen(): boolean {
+    return this.nBackWindow !== null && this.nBackWindow !== undefined && !this.nBackWindow.isDestroyed();
+  }
+
   public async createMuseWindow(goToStep?: string) {
     this.closeMuseWindow();
 
@@ -269,7 +313,7 @@ export class WindowService {
       maximizable: false,
       fullscreenable: false,
       resizable: true,
-      title: 'Muselytics: Muse Tracking',
+      title: 'PersonalAnalytics: Muse Tracking',
       webPreferences: {
         preload
       }
@@ -298,6 +342,149 @@ export class WindowService {
     });
   }
 
+  public async createNBackWindow() {
+    this.closeNBackWindow();
+    this.closeExperienceSamplingWindowSilently();
+
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const preload = join(__dirname, '../preload/index.mjs');
+
+    this.nBackWindow = new BrowserWindow({
+      width: 720,
+      height: 720,
+      show: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreen: true,
+      fullscreenable: true,
+      resizable: true,
+      title: 'PersonalAnalytics: N-Back Interface',
+      webPreferences: {
+        preload
+      }
+    });
+
+    const nBackMenu = this.buildNBackWindowMenu();
+    this.nBackWindow.setMenu(nBackMenu);
+    this.nBackWindow.setAutoHideMenuBar(false);
+    this.nBackWindow.setMenuBarVisibility(true);
+
+    this.nBackCloseSource = 'unknown';
+    this.nBackSessionContext = {};
+
+    this.nBackWindow.webContents.on('before-input-event', (event, input) => {
+      if (input.type === 'keyDown' && input.alt && input.key === 'F4') {
+        event.preventDefault();
+        this.nBackCloseSource = 'alt-f4';
+        this.nBackWindow?.close();
+      }
+    });
+
+    if (process.env.VITE_DEV_SERVER_URL) {
+      await this.nBackWindow.loadURL(process.env.VITE_DEV_SERVER_URL + '#n-back');
+    } else {
+      await this.nBackWindow.loadFile(path.join(process.env.DIST, 'index.html'), {
+        hash: 'n-back'
+      });
+    }
+
+    this.nBackWindow.show();
+
+    this.nBackWindow.on('close', () => {
+      const closeSource =
+        this.nBackCloseSource === 'unknown' ? 'window-close-button' : this.nBackCloseSource;
+      const workflowState = this.nBackSessionContext.workflowState ?? 'unknown';
+      const isCompleted =
+        this.nBackSessionContext.abandoned === false ||
+        workflowState === 'completed' ||
+        closeSource === 'renderer-close';
+      const abandoned = !isCompleted;
+
+      const additionalInformation = JSON.stringify({
+        abandoned,
+        closeSource,
+        closedAt: new Date().toISOString(),
+        sessionId: this.nBackSessionContext.sessionId ?? null,
+        workflowState,
+        currentTaskIndex: this.nBackSessionContext.currentTaskIndex ?? null,
+        currentLevel: this.nBackSessionContext.currentLevel ?? null,
+        randomizedLevelOrder: this.nBackSessionContext.randomizedLevelOrder ?? [],
+        remainingLevels: this.nBackSessionContext.remainingLevels ?? []
+      });
+
+      UsageDataService.createNewUsageDataEvent(
+        abandoned ? UsageDataEventType.NBackWindowAbandoned : UsageDataEventType.NBackWindowCompleted,
+        additionalInformation
+      );
+
+      this.nBackCloseSource = 'unknown';
+      this.nBackSessionContext = {};
+      this.nBackWindow = null;
+    });
+  }
+
+  private normalizeNBackCloseSource(source: string): NBackCloseSource {
+    if (
+      source === 'renderer-close' ||
+      source === 'menu-close' ||
+      source === 'window-close-button' ||
+      source === 'alt-f4'
+    ) {
+      return source;
+    }
+    return 'unknown';
+  }
+
+  private buildNBackWindowMenu(): Menu {
+    const template: MenuItemConstructorOptions[] = [
+      {
+        label: 'Study Tasks',
+        submenu: [
+          {
+            label: 'Reload Window',
+            accelerator: 'CmdOrCtrl+R',
+            click: () => this.nBackWindow?.reload()
+          },
+          {
+            label: 'Force Reload Window',
+            accelerator: 'CmdOrCtrl+Shift+R',
+            click: () => this.nBackWindow?.webContents.reloadIgnoringCache()
+          },
+          { type: 'separator' },
+          {
+            label: 'Close Study Tasks',
+            accelerator: is.macOS ? 'CmdOrCtrl+W' : 'Alt+F4',
+            click: () => {
+              this.nBackCloseSource = 'menu-close';
+              this.nBackWindow?.close();
+            }
+          }
+        ]
+      },
+      {
+        label: 'View',
+        submenu: [
+          { role: 'zoomIn' },
+          { role: 'zoomOut' },
+          { role: 'resetZoom' },
+          { type: 'separator' },
+          { role: 'togglefullscreen' },
+          ...(is.dev ? [{ type: 'separator' as const }, { role: 'toggleDevTools' as const }] : [])
+        ]
+      }
+    ];
+
+    return Menu.buildFromTemplate(template);
+  }
+
+  private closeExperienceSamplingWindowSilently() {
+    if (this.experienceSamplingWindow) {
+      this.experienceSamplingWindow.close();
+      this.experienceSamplingWindow = null;
+    }
+  }
+
   public async createDataExportWindow() {
     this.destroyDataExportWindow();
 
@@ -313,7 +500,7 @@ export class WindowService {
       minWidth: 1200,
       minHeight: 850,
       fullscreenable: false,
-      title: 'Muselytics: Data Export',
+      title: 'PersonalAnalytics: Data Export',
       webPreferences: {
         preload
       }
@@ -475,6 +662,10 @@ export class WindowService {
       {
         label: 'Open Muse Interface',
         click: () => this.createMuseWindow()
+      },
+      {
+        label: 'Open Study Tasks',
+        click: () => this.createNBackWindow()
       },
       {
         label: 'Open Study Data Export',

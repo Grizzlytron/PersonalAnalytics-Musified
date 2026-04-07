@@ -40,6 +40,31 @@ export interface TaskTrackerConfiguration {
   enabled: boolean;
 }
 
+export interface NBackTaskDefinition {
+  n: number;
+  withDistractions?: boolean;
+  totalTrials?: number;
+}
+
+export interface NBackReflectionQuestionConfiguration {
+  id: string;
+  text: string;
+  minLabel: string;
+  midLabel: string;
+  maxLabel: string;
+}
+
+export interface NBackInterfaceConfiguration {
+  enabled: boolean;
+  title: string;
+  description: string;
+  scale: number;
+  tasks: NBackTaskDefinition[];
+  reflectionQuestions: NBackReflectionQuestionConfiguration[];
+  distractionDotCount?: number;
+  randomizeTasksAfterFirstLevel?: boolean;
+}
+
 export interface TrackerConfiguration {
   windowActivityTracker: WindowActivityTrackerConfiguration;
   userInputTracker: UserInputTrackerConfiguration;
@@ -62,6 +87,7 @@ export interface StudyConfiguration {
   dataExportFormat: DataExportFormat;
   dataExportDDLProjectName?: string;
   trackers: TrackerConfiguration;
+  nBackInterface?: NBackInterfaceConfiguration;
   displayDaysParticipated: boolean;
   showActiveTimesInOnboarding?: boolean;
 }

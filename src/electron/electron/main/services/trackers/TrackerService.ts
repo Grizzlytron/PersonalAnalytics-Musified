@@ -21,6 +21,7 @@ export class TrackerService {
   private readonly windowService: WindowService;
   private readonly workScheduleService: WorkScheduleService;
   private checkIfUITIsWorkingJob: schedule.Job;
+  private manuallyStartedTrackerNames: Set<string> = new Set();
 
   constructor(
     TrackerConfiguration: TrackerConfiguration,
@@ -125,7 +126,10 @@ export class TrackerService {
 
   public async startAllTrackers() {
     await Promise.all(
-      this.trackers.filter((t: Tracker) => !t.isRunning).map((t: Tracker) => t.start())
+      this.trackers
+        .filter((t: Tracker) => !t.isRunning)
+        .filter((t: Tracker) => this.shouldAutoStartTracker(t))
+        .map((t: Tracker) => t.start())
     );
     this.setCheckIfUITIsWorkingJob();
   }
@@ -134,8 +138,35 @@ export class TrackerService {
     await Promise.all(
       this.trackers
         .filter((t: Tracker) => !t.isRunning)
+        .filter((t: Tracker) => this.shouldResumeTracker(t))
         .map((t: Tracker): void => (t.resume ? t.resume() : t.start()))
     );
+  }
+
+  public async startTracker(name: string): Promise<void> {
+    const tracker = this.getTracker(name);
+    if (!tracker) {
+      throw new Error(`Tracker ${name} not found`);
+    }
+
+    if (!tracker.isRunning) {
+      await (tracker.resume ? tracker.resume() : tracker.start());
+    }
+
+    this.manuallyStartedTrackerNames.add(name);
+  }
+
+  public async stopTracker(name: string): Promise<void> {
+    const tracker = this.getTracker(name);
+    if (!tracker) {
+      throw new Error(`Tracker ${name} not found`);
+    }
+
+    if (tracker.isRunning) {
+      await tracker.stop();
+    }
+
+    this.manuallyStartedTrackerNames.delete(name);
   }
 
   public async stopAllTrackers() {
@@ -162,5 +193,21 @@ export class TrackerService {
 
   private isTrackerAlreadyRegistered(trackerType: TrackerType) {
     return this.trackers.some((t: Tracker) => t.name === trackerType);
+  }
+
+  private shouldAutoStartTracker(tracker: Tracker): boolean {
+    return !this.isManualStartTracker(tracker.name);
+  }
+
+  private shouldResumeTracker(tracker: Tracker): boolean {
+    if (!this.isManualStartTracker(tracker.name)) {
+      return true;
+    }
+
+    return this.manuallyStartedTrackerNames.has(tracker.name);
+  }
+
+  private isManualStartTracker(trackerName: string): boolean {
+    return trackerName === TrackerType.MuseTracker;
   }
 }

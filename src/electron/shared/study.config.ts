@@ -9,7 +9,7 @@ const studyConfig: StudyConfiguration = {
   privacyPolicyUrl:
     'https://github.com/Grizzlytron/Muselytics/blob/dev/documentation/PRIVACY.md',
   uploadUrl:
-    'https://www.dropbox.com/scl/fo/3icsygtmvnqnljjkyuu4j/AG-GaLrWqT_o2tU7n9qnFvM?rlkey=9z2voh0de4xh2a2d47n1ghasy&st=7e1zvoav&dl=0', // https://datadonation.uzh.ch/ddm/studies/grizzlyAnalytics/briefing/
+    'https://www.dropbox.com/scl/fo/3icsygtmvnqnljjkyuu4j/AG-GaLrWqT_o2tU7n9qnFvM?rlkey=9z2voh0de4xh2a2d47n1ghasy&st=6e8mmf3f&dl=0', // https://datadonation.uzh.ch/ddm/studies/grizzlyAnalytics/briefing/
   contactName: 'Lucas Bär',
   contactEmail: 'lucastimothyleo.baer@uzh.ch',
   subjectIdLength: 6,
@@ -17,6 +17,50 @@ const studyConfig: StudyConfiguration = {
   dataExportFormat: DataExportFormat.ExportAsZippedSqlite, // default should be ExportAsZippedSqlite,
   dataExportDDLProjectName: 'PA_Test3',
   dataExportEncrypted: false,
+  nBackInterface: {
+    enabled: true,
+    title: 'Space Crusaders',
+    description:
+      "Hello Captain! The Situation is pressing and we need your help. We are currently flying on an intergalactic spaceship while galactic monsters are chasing us across the galaxy. Your mission is to outrun them across 5 levels by making precise gate decisions under pressure. You need to decide when to boost our engine through a gate by pressing J only when the level rule says the gate is open; if it is not open, do not press anything. Watch your Speed Bar: correct gate presses increase your speed, while incorrect presses slow you down and increase the chance of being caught and eaten by the monsters. After each level Mission Control will ask you two self-reflection questions, answer them as truthfully as possible based on your perception of the previous level you completed. Good luck, Captain!",
+    scale: 7,
+    tasks: [
+      {
+        n: 0,
+        totalTrials: 20
+      },
+      {
+        n: 1
+      },
+      {
+        n: 2
+      },
+      {
+        n: 2,
+        withDistractions: true
+      },
+      {
+        n: 3
+      }
+    ],
+    reflectionQuestions: [
+      {
+        id: 'demanding',
+        text: 'How mentally demanding was this block for you?',
+        minLabel: 'Not demanding',
+        midLabel: 'Moderate',
+        maxLabel: 'Very demanding'
+      },
+      {
+        id: 'focused',
+        text: 'During the last block, how focused were you on the task?',
+        minLabel: 'Not focused',
+        midLabel: 'Moderately focused',
+        maxLabel: 'Very focused'
+      }
+    ],
+    distractionDotCount: 18,
+    randomizeTasksAfterFirstLevel: true
+  },
   displayDaysParticipated: true,
   showActiveTimesInOnboarding: true,
   trackers: {
@@ -35,17 +79,15 @@ const studyConfig: StudyConfiguration = {
       enabledWorkHours: false,
       scale: 7,
       questions: [
-        // 'Compared to your normal level of productivity, how productive do you consider the previous session?',
-        // 'How well did you spend your time in the previous session?',
-        'How focused did you feel in the last session?'
+        'Compared to your normal level of focus, how focused did you feel in the last session?',
+        'Compared to your normal level of mental effort, how much effort did you put in the last session?'
       ],
       responseOptions: [
-        // ['not at all productive', 'moderately productive', 'very productive'],
-        // ['not well', 'moderately well', 'very well'],
-        ['not focused', 'moderately focused', 'very focused']
+        ['not focused', 'moderately focused', 'very focused'],
+        ['not much effort', 'moderately much effort', 'very much effort']
       ],
-      intervalInMs: 1000 * 60 * 5, // default interval (must be listed in userDefinedInterval_h if set)
-      samplingRandomization: 0.2, // 20% randomization, so the interval will be between 4 and 6 minutes
+      intervalInMs: 1000 * 60 * 15, // default interval (must be listed in userDefinedInterval_h if set)
+      samplingRandomization: 0.2, // 20% randomization, so the interval will be between 12 and 18 minutes
       allowUserToDisable: true,
       allowUserToChangeInterval: true,
       userDefinedInterval_h: [0.0833, 0.25, 0.5, 1, 2, 4]

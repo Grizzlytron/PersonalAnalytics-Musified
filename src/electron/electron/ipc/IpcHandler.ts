@@ -25,6 +25,8 @@ import { WorkScheduleService } from 'electron/main/services/WorkScheduleService'
 import { WorkHoursDto } from 'shared/dto/WorkHoursDto';
 import { MuseRawEegEntity } from '../main/entities/MuseRawEegEntity';
 import path from 'path';
+import type { NBackTaskBlockDto } from '../../shared/dto/NBackTaskBlockDto';
+import { NBackTaskBlockEntity } from '../main/entities/NBackTaskBlockEntity';
 
 const LOG = getMainLogger('IpcHandler');
 
@@ -32,6 +34,13 @@ export class IpcHandler {
   private actions: any;
   private readonly windowService: WindowService;
   private readonly trackerService: TrackerService;
+  private readonly MUSE_STATUS_METRICS_REFRESH_MS = 30000;
+  private museStatusMetrics = {
+    lastRefreshedAt: 0,
+    totalDataPoints: 0,
+    trackedMinutes: 0
+  };
+  private museStatusMetricsRefreshPromise: Promise<void> | null = null;
 
   private readonly experienceSamplingService: ExperienceSamplingService;
   private readonly windowActivityService: WindowActivityTrackerService;
@@ -65,8 +74,12 @@ export class IpcHandler {
       getSettings: this.getSettings,
       createExperienceSample: this.createExperienceSample,
       closeExperienceSamplingWindow: this.closeExperienceSamplingWindow,
+      openNBackWindow: this.openNBackWindow,
+      closeNBackWindow: this.closeNBackWindow,
+      setNBackSessionContext: this.setNBackSessionContext,
       closeOnboardingWindow: this.closeOnboardingWindow,
       closeDataExportWindow: this.closeDataExportWindow,
+      saveNBackTaskBlock: this.saveNBackTaskBlock,
       getStudyInfo: this.getStudyInfo,
       getMostRecentExperienceSamplingDtos: this.getMostRecentExperienceSamplingDtos,
       getMostRecentWindowActivityDtos: this.getMostRecentWindowActivityDtos,
@@ -105,18 +118,24 @@ export class IpcHandler {
 
   private async createExperienceSample(
     promptedAt: Date,
-    question: string,
-    responseOptions: string,
+    question1: string,
+    responseOptions1: string,
+    question2: string,
+    responseOptions2: string,
     scale: number,
-    response: number,
+    response1?: number,
+    response2?: number,
     skipped: boolean = false
   ) {
     await this.experienceSamplingService.createExperienceSample(
       promptedAt,
-      question,
-      responseOptions,
+      question1,
+      responseOptions1,
+      question2,
+      responseOptions2,
       scale,
-      response,
+      response1,
+      response2,
       skipped
     );
   }
@@ -135,12 +154,51 @@ export class IpcHandler {
     this.windowService.closeExperienceSamplingWindow(skippedExperienceSampling);
   }
 
+  private async openNBackWindow(): Promise<void> {
+    await this.windowService.createNBackWindow();
+  }
+
+  private closeNBackWindow(source?: string): void {
+    this.windowService.closeNBackWindow(source);
+  }
+
+  private setNBackSessionContext(context: {
+    sessionId?: string;
+    workflowState?: string;
+    currentTaskIndex?: number;
+    currentLevel?: string;
+    randomizedLevelOrder?: string[];
+    remainingLevels?: string[];
+    abandoned?: boolean;
+  }): void {
+    this.windowService.setNBackSessionContext(context);
+  }
+
   private closeOnboardingWindow(): void {
     this.windowService.closeOnboardingWindow();
   }
 
   private closeDataExportWindow(): void {
     this.windowService.closeDataExportWindow();
+  }
+
+  private async saveNBackTaskBlock(payload: NBackTaskBlockDto): Promise<void> {
+    await NBackTaskBlockEntity.save({
+      sessionId: payload.sessionId,
+      taskId: payload.taskId,
+      withDistractions: payload.withDistractions,
+      startedAt: new Date(payload.startedAt),
+      completedAt: new Date(payload.completedAt),
+      completedTrials: payload.completedTrials,
+      correctResponses: payload.correctResponses,
+      accuracyPercent: payload.accuracyPercent,
+      timingConfig: JSON.stringify(payload.timingConfig),
+      reflectionQuestion1: payload.reflectionQuestion1,
+      reflectionResponse1: payload.reflectionResponse1,
+      reflectionQuestion2: payload.reflectionQuestion2,
+      reflectionResponse2: payload.reflectionResponse2,
+      trialResults: JSON.stringify(payload.trialResults)
+    });
   }
 
   private async getWorkHours(): Promise<WorkHoursDto> {
@@ -270,6 +328,40 @@ export class IpcHandler {
     }
   }
 
+  private async refreshMuseStatusMetrics(museService: MuseTrackerService): Promise<void> {
+    const now = Date.now();
+    const isFresh =
+      now - this.museStatusMetrics.lastRefreshedAt < this.MUSE_STATUS_METRICS_REFRESH_MS;
+
+    if (isFresh) {
+      return;
+    }
+
+    if (this.museStatusMetricsRefreshPromise) {
+      await this.museStatusMetricsRefreshPromise;
+      return;
+    }
+
+    this.museStatusMetricsRefreshPromise = (async () => {
+      const [totalDataPoints, trackedMinutes] = await Promise.all([
+        MuseRawEegEntity.count(),
+        museService.getRawEegTrackedMinutes()
+      ]);
+
+      this.museStatusMetrics = {
+        lastRefreshedAt: Date.now(),
+        totalDataPoints,
+        trackedMinutes
+      };
+    })();
+
+    try {
+      await this.museStatusMetricsRefreshPromise;
+    } finally {
+      this.museStatusMetricsRefreshPromise = null;
+    }
+  }
+
   private downsampleRawEegForUi(
     raw: Array<{ id: number; timestamp: Date; tp9: number; af7: number; af8: number; tp10: number }>,
     sampleIntervalMs: number
@@ -305,15 +397,15 @@ export class IpcHandler {
 
       // Pull a recent raw window and downsample to 500ms excerpts for UI responsiveness.
       // Non-EEG tabs request a lighter dataset to reduce CPU/IO load.
-      const rawWindowSize = includeDenseData ? 20000 : 2000;
+      const rawWindowSize = includeDenseData ? 10000 : 800;
       const museService = new MuseTrackerService();
       const recentRawData = await museService.getMostRecentRawEegData(rawWindowSize);
       const latestData = this.downsampleRawEegForUi(recentRawData, sampleIntervalMs);
       const latestMetadata = await museService.getLatestMetadata();
 
-      // Get total count efficiently
-      const totalDataPoints = await MuseRawEegEntity.count();
-      const trackedMinutes = await museService.getRawEegTrackedMinutes();
+      // Refresh heavy aggregate metrics only occasionally to keep UI polling smooth
+      // even when the EEG table grows large.
+      await this.refreshMuseStatusMetrics(museService);
 
       // Get connected device (single device) using live tracker state when available
       let connectedDevice = null;
@@ -356,8 +448,8 @@ export class IpcHandler {
           hsiTp10: latestMetadata?.hsiTp10,
           connectionState: 'connected'
         })),
-        totalDataPoints: totalDataPoints,
-        trackedMinutes,
+        totalDataPoints: this.museStatusMetrics.totalDataPoints,
+        trackedMinutes: this.museStatusMetrics.trackedMinutes,
         averageSignalQuality: avgQuality
       };
     } catch (error) {
@@ -379,9 +471,8 @@ export class IpcHandler {
       if (!tracker) {
         throw new Error('Muse tracker not available');
       }
-      if (!tracker.isRunning) {
-        await tracker.start();
-      }
+
+      await this.trackerService.startTracker('MuseTracker');
     } catch (error) {
       LOG.error('Error starting Muse tracker', error);
       throw error;
@@ -395,32 +486,53 @@ export class IpcHandler {
       if (!tracker) {
         throw new Error('Muse tracker not available');
       }
-      if (tracker.isRunning) {
-        await tracker.stop();
-      }
+
+      await this.trackerService.stopTracker('MuseTracker');
     } catch (error) {
       LOG.error('Error stopping Muse tracker', error);
       throw error;
     }
   }
 
-  private async getMuseDataForExport(): Promise<any[]> {
+  private async getMuseDataForExport(): Promise<{
+    data: Array<{
+      id: number;
+      timestamp: Date;
+      channel1_TP9: number;
+      channel2_AF7: number;
+      channel3_AF8: number;
+      channel4_TP10: number;
+    }>;
+    totalDataPoints: number;
+    previewLimit: number;
+  }> {
     try {
       const museService = new MuseTrackerService();
       const previewLimit = 5000;
-      const allData = await museService.getRawEegDataForExport(previewLimit);
+      const [previewData, totalDataPoints] = await Promise.all([
+        museService.getRawEegDataForExport(previewLimit),
+        MuseRawEegEntity.count()
+      ]);
 
-      return allData.map((d) => ({
-        id: d.id,
-        timestamp: d.timestamp,
-        channel1_TP9: d.tp9,
-        channel2_AF7: d.af7,
-        channel3_AF8: d.af8,
-        channel4_TP10: d.tp10
-      }));
+      return {
+        data: previewData.map((d) => ({
+          id: d.id,
+          timestamp: d.timestamp,
+          channel1_TP9: d.tp9,
+          channel2_AF7: d.af7,
+          channel3_AF8: d.af8,
+          channel4_TP10: d.tp10
+        })),
+        totalDataPoints,
+        previewLimit
+      };
     } catch (error) {
       LOG.error('Error getting Muse data for export', error);
-      return [];
+      return {
+        data: [],
+        totalDataPoints: 0,
+        previewLimit: 5000
+      };
     }
   }
 

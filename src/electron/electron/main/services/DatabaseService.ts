@@ -10,7 +10,9 @@ import { Settings } from '../entities/Settings';
 import { UsageDataEntity } from '../entities/UsageDataEntity';
 import { WorkDayEntity } from '../entities/WorkDayEntity';
 import { MuseRawEegEntity } from '../entities/MuseRawEegEntity';
+import { MuseRawOpticsEntity } from '../entities/MuseRawOpticsEntity';
 import { MuseMetadataEntity } from '../entities/MuseMetadataEntity';
+import { NBackTaskBlockEntity } from '../entities/NBackTaskBlockEntity';
 
 const LOG = getMainLogger('DatabaseService');
 
@@ -37,7 +39,9 @@ export class DatabaseService {
       WindowActivityEntity,
       WorkDayEntity,
       MuseRawEegEntity,
-      MuseMetadataEntity
+      MuseRawOpticsEntity,
+      MuseMetadataEntity,
+      NBackTaskBlockEntity
     ];
 
     let options: DataSourceOptions = {

@@ -4,3 +4,6 @@
 [submodule "src/electron/PA.UserInputTracker"]
 	path = src/electron/PA.UserInputTracker
 	url = https://github.com/HASEL-UZH/PA.UserInputTracker
+[submodule "src/electron/src/electron/PA.MuseTracker/native"]
+	path = src/electron/src/electron/PA.MuseTracker/native
+	url = https://github.com/Grizzlytron/PA.MuseTracker.git

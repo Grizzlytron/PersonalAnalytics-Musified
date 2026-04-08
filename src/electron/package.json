@@ -74,12 +74,12 @@
     "electron-log": "^5.1.1",
     "form-data": "^4.0.5",
     "jsdom": "^25.0.1",
-    "muse-tracker": "file:PA.MuseTracker/typescript",
     "node-schedule": "^2.1.1",
     "typeorm": "^0.3.28",
-    "user-input-tracker": "file:PA.UserInputTracker/typescript",
     "vue-chartjs": "^5.3.3",
     "vue-router": "^4.2.5",
-    "windows-activity-tracker": "file:PA.WindowsActivityTracker/typescript"
+    "windows-activity-tracker": "file:PA.WindowsActivityTracker/typescript",
+    "user-input-tracker": "file:PA.UserInputTracker/typescript",
+    "muse-tracker": "file:PA.MuseTracker/typescript"
   }
 }

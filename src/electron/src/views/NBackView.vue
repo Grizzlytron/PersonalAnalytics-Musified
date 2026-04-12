@@ -135,8 +135,9 @@ const saveError = ref<string | null>(null);
 const isSaving = ref(false);
 const museConnectionState = ref<MuseConnectionState>('disconnected');
 
-const museStatusRefreshMs = 4000;
+const museStatusRefreshMs = 6000;
 let museStatusInterval: ReturnType<typeof setInterval> | null = null;
+let museStatusRequestInFlight = false;
 
 let stopTaskWatcher: (() => void) | null = null;
 
@@ -278,26 +279,26 @@ function getLevelGoalOverview(taskDef: NBackTaskDefinition | null): string {
   }
 
   if (taskDef.n === 0) {
-    return 'Press J when the highlighted square appears in the top-left position. Do not press for any other position.';
+    return 'Press J when the highlighted gate appears in the top-left position. Do not press for any other position.';
   }
 
   if (taskDef.n === 1) {
-    return 'Press J when the current square matches the immediately previous square (1-back).';
+    return 'Press J when the current gate matches the immediately previous gate (1-back).';
   }
 
   if (taskDef.n === 2 && taskDef.withDistractions !== true) {
-    return 'Press J when the current square matches the square from 2 trials ago (2-back).';
+    return 'Press J when the current gate matches the gate from 2 trials ago (2-back).';
   }
 
   if (taskDef.n === 2 && taskDef.withDistractions === true) {
-    return 'Press J when the current square matches the square from 2 trials ago, while ignoring flickers, meteorites, and laser streaks in the background.';
+    return 'Press J when the current gate matches the gate from 2 trials ago, while ignoring flickers, meteorites, and laser streaks in the background.';
   }
 
   if (taskDef.n === 3) {
-    return 'Press J when the current square matches the square from 3 trials ago (3-back).';
+    return 'Press J when the current gate matches the gate from 3 trials ago (3-back).';
   }
 
-  return 'Press J only when the current square matches this level\'s N-back rule.';
+  return 'Press J only when the current gate matches this level\'s N-back rule.';
 }
 
 const currentLevelGoalOverview = computed(() => getLevelGoalOverview(currentTask.value));
@@ -607,6 +608,11 @@ const museIndicatorText = computed(() => {
 });
 
 async function refreshMuseConnectionStatus() {
+  if (museStatusRequestInFlight) {
+    return;
+  }
+
+  museStatusRequestInFlight = true;
   try {
     const status = await typedIpcRenderer.invoke('muse:get-tracker-status', false);
     if (!status?.connectedDevice) {
@@ -614,8 +620,8 @@ async function refreshMuseConnectionStatus() {
       return;
     }
 
-    const latestSample = [...(status.latestData ?? [])]
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+    const latestData = status.latestData ?? [];
+    const latestSample = latestData.length > 0 ? latestData[latestData.length - 1] : null;
     const hsiValues = [
       latestSample?.hsiTp9,
       latestSample?.hsiAf7,
@@ -647,6 +653,8 @@ async function refreshMuseConnectionStatus() {
     museConnectionState.value = 'good';
   } catch {
     museConnectionState.value = 'disconnected';
+  } finally {
+    museStatusRequestInFlight = false;
   }
 }
 
@@ -657,6 +665,9 @@ function startMuseStatusPolling() {
   }
 
   museStatusInterval = setInterval(() => {
+    if (workflowState.value !== 'task-ready' && workflowState.value !== 'task-running') {
+      return;
+    }
     void refreshMuseConnectionStatus();
   }, museStatusRefreshMs);
 }

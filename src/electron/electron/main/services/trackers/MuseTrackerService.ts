@@ -4,6 +4,9 @@ import { MuseMetadataEntity } from '../../entities/MuseMetadataEntity';
 import getMainLogger from '../../../config/Logger';
 
 const LOG = getMainLogger('MuseTrackerService');
+const SQLITE_MAX_VARIABLES = 999;
+const RAW_EEG_COLUMNS_PER_ROW = 5;
+const RAW_OPTICS_COLUMNS_PER_ROW = 5;
 
 export interface RawEegSample {
   timestamp: Date;
@@ -32,8 +35,77 @@ export interface MetadataSample {
 }
 
 export class MuseTrackerService {
+  private static chunkSizeForColumns(columnsPerRow: number): number {
+    return Math.max(1, Math.floor(SQLITE_MAX_VARIABLES / columnsPerRow));
+  }
+
+  private static parseFiniteNumber(value: unknown): number | undefined {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const parsed = Number(value.trim());
+      return Number.isFinite(parsed) ? parsed : undefined;
+    }
+
+    return undefined;
+  }
+
+  private static parseTimestamp(value: unknown): Date | null {
+    if (value instanceof Date) {
+      return Number.isFinite(value.getTime()) ? value : null;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      const parsed = new Date(value);
+      return Number.isFinite(parsed.getTime()) ? parsed : null;
+    }
+
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const direct = new Date(trimmed);
+    if (Number.isFinite(direct.getTime())) {
+      return direct;
+    }
+
+    const withT = trimmed.includes(' ') && !trimmed.includes('T') ? trimmed.replace(' ', 'T') : trimmed;
+    const normalized = new Date(withT);
+    if (Number.isFinite(normalized.getTime())) {
+      return normalized;
+    }
+
+    const sqliteMatch = withT.match(
+      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?$/
+    );
+    if (!sqliteMatch) {
+      return null;
+    }
+
+    const [, year, month, day, hour, minute, second, fractional] = sqliteMatch;
+    const ms = fractional ? Number(fractional.slice(0, 3).padEnd(3, '0')) : 0;
+    const parsed = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+      ms
+    );
+
+    return Number.isFinite(parsed.getTime()) ? parsed : null;
+  }
+
   private static finiteNumberOrUndefined(value: unknown): number | undefined {
-    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+    return MuseTrackerService.parseFiniteNumber(value);
   }
 
   public static async saveRawEegBatch(samples: RawEegSample[]): Promise<void> {
@@ -42,19 +114,23 @@ export class MuseTrackerService {
     }
 
     try {
-      await MuseRawEegEntity.createQueryBuilder()
-        .insert()
-        .into(MuseRawEegEntity)
-        .values(
-          samples.map((sample) => ({
-            timestamp: sample.timestamp,
-            tp9: sample.tp9,
-            af7: sample.af7,
-            af8: sample.af8,
-            tp10: sample.tp10
-          }))
-        )
-        .execute();
+      const chunkSize = MuseTrackerService.chunkSizeForColumns(RAW_EEG_COLUMNS_PER_ROW);
+      for (let i = 0; i < samples.length; i += chunkSize) {
+        const chunk = samples.slice(i, i + chunkSize);
+        await MuseRawEegEntity.createQueryBuilder()
+          .insert()
+          .into(MuseRawEegEntity)
+          .values(
+            chunk.map((sample) => ({
+              timestamp: sample.timestamp,
+              tp9: sample.tp9,
+              af7: sample.af7,
+              af8: sample.af8,
+              tp10: sample.tp10
+            }))
+          )
+          .execute();
+      }
     } catch (error) {
       LOG.error('Error saving raw Muse EEG batch', error);
       throw error;
@@ -67,19 +143,23 @@ export class MuseTrackerService {
     }
 
     try {
-      await MuseRawOpticsEntity.createQueryBuilder()
-        .insert()
-        .into(MuseRawOpticsEntity)
-        .values(
-          samples.map((sample) => ({
-            timestamp: sample.timestamp,
-            ch0: sample.ch0,
-            ch1: sample.ch1,
-            ch2: sample.ch2,
-            ch3: sample.ch3
-          }))
-        )
-        .execute();
+      const chunkSize = MuseTrackerService.chunkSizeForColumns(RAW_OPTICS_COLUMNS_PER_ROW);
+      for (let i = 0; i < samples.length; i += chunkSize) {
+        const chunk = samples.slice(i, i + chunkSize);
+        await MuseRawOpticsEntity.createQueryBuilder()
+          .insert()
+          .into(MuseRawOpticsEntity)
+          .values(
+            chunk.map((sample) => ({
+              timestamp: sample.timestamp,
+              ch0: sample.ch0,
+              ch1: sample.ch1,
+              ch2: sample.ch2,
+              ch3: sample.ch3
+            }))
+          )
+          .execute();
+      }
     } catch (error) {
       LOG.error('Error saving raw Muse optics batch', error);
       throw error;
@@ -110,7 +190,7 @@ export class MuseTrackerService {
   public async getLatestMetadata(): Promise<MuseMetadataEntity | null> {
     try {
       const rows = await MuseMetadataEntity.find({
-        order: { timestamp: 'DESC' },
+        order: { timestamp: 'DESC', id: 'DESC' },
         take: 1
       });
       return rows.length > 0 ? rows[0] : null;
@@ -129,6 +209,55 @@ export class MuseTrackerService {
       return entities;
     } catch (error) {
       LOG.error('Error retrieving raw Muse EEG data', error);
+      throw error;
+    }
+  }
+
+  public async getMostRecentRawEegDataAsc(itemCount: number): Promise<MuseRawEegEntity[]> {
+    try {
+      // Keep UI polling fixed-cost regardless of table size by reading only the newest N rows,
+      // then ordering those rows chronologically for chart rendering.
+      const rows = await MuseRawEegEntity.getRepository().query(
+        `
+          SELECT id, timestamp, tp9, af7, af8, tp10
+          FROM (
+            SELECT id, timestamp, tp9, af7, af8, tp10
+            FROM muse_raw_eeg
+            ORDER BY timestamp DESC, id DESC
+            LIMIT ?
+          ) recent
+          ORDER BY timestamp ASC, id ASC
+        `,
+        [itemCount]
+      );
+
+      const parsedRows: MuseRawEegEntity[] = [];
+      for (const row of rows) {
+        const timestamp = MuseTrackerService.parseTimestamp(row.timestamp);
+        const tp9 = MuseTrackerService.parseFiniteNumber(row.tp9);
+        const af7 = MuseTrackerService.parseFiniteNumber(row.af7);
+        const af8 = MuseTrackerService.parseFiniteNumber(row.af8);
+        const tp10 = MuseTrackerService.parseFiniteNumber(row.tp10);
+
+        if (!timestamp || tp9 === undefined || af7 === undefined || af8 === undefined || tp10 === undefined) {
+          continue;
+        }
+
+        parsedRows.push(
+          MuseRawEegEntity.create({
+            id: row.id,
+            timestamp,
+            tp9,
+            af7,
+            af8,
+            tp10
+          })
+        );
+      }
+
+      return parsedRows;
+    } catch (error) {
+      LOG.error('Error retrieving ascending recent raw Muse EEG data', error);
       throw error;
     }
   }

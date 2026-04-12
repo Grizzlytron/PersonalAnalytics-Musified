@@ -79,7 +79,9 @@ export class MuseTracker implements Tracker {
   private museCore: any = null;
   private collectingInterval: number;
   private aggregationTimer: NodeJS.Timeout | null = null;
+  private aggregateAndSaveInFlight: Promise<void> | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  private presetReconnectTimer: NodeJS.Timeout | null = null;
   private currentDeviceId: string | null = null;
   private currentDeviceName: string | null = null;
   private targetDeviceId: string | null = null;
@@ -95,8 +97,10 @@ export class MuseTracker implements Tracker {
   // Raw optics packet buffer (4ch at 64Hz on PRESET_1035).
   private opticsBuffer: DataPacket[] = [];
   private lastBatteryLevel: number = 0;
+  private lastBatteryUpdatedAtMs: number | null = null;
   // HSI values per channel (1=good, 2=mediocre, 4=poor).
-  private lastHsiValues: number[] = [4, 4, 4, 4];
+  private lastHsiValues: Array<number | undefined> = [undefined, undefined, undefined, undefined];
+  private lastHsiUpdatedAtMs: number | null = null;
   private lastSavedMetadata: MetadataSample | null = null;
   private savedSamplesSinceProgressLog: number = 0;
   private lastSaveProgressLogMs: number = 0;
@@ -169,6 +173,24 @@ export class MuseTracker implements Tracker {
             this.museCore.setPreset(this.MUSE_2025_PRESET);
             this.presetConfigured = true;
             this.expectingPresetReconnect = true;
+            
+            // Clear any existing preset reconnect timer
+            this.clearPresetReconnectTimer();
+            
+            // Set a 30-second timeout for device to reconnect with new preset
+            this.presetReconnectTimer = setTimeout(() => {
+              this.presetReconnectTimer = null;
+              if (this.expectingPresetReconnect && !this.isConnected) {
+                LOG.error('Preset reconnect timeout: Device did not reconnect within 30s after preset change');
+                this.expectingPresetReconnect = false;
+                this.presetConfigured = false;
+                // Attempt to reconnect manually
+                if (this.targetDeviceId) {
+                  this.scheduleReconnect('preset_reconnect_timeout');
+                }
+              }
+            }, 30000);
+            
             LOG.info('Preset set - device will disconnect and reconnect with PRESET_1035');
           } catch (err) {
             LOG.error('Failed to set preset', err);
@@ -180,6 +202,7 @@ export class MuseTracker implements Tracker {
         } else {
           // Second connection (after preset applied) - now enable data transmission
           this.expectingPresetReconnect = false;
+          this.clearPresetReconnectTimer();
           LOG.info('Reconnected with PRESET_1035 - EEG and quality listeners active');
           this.enableStreaming();
         }
@@ -190,6 +213,10 @@ export class MuseTracker implements Tracker {
         this.isConnected = false;
         this.currentDeviceId = null;
         this.currentDeviceName = null;
+        this.lastBatteryLevel = 0;
+        this.lastBatteryUpdatedAtMs = null;
+        this.lastHsiValues = [undefined, undefined, undefined, undefined];
+        this.lastHsiUpdatedAtMs = null;
         this.lastSavedMetadata = null;
         this.clearAllBuffers();
         LOG.info(`Disconnected from ${packet.museName}`);
@@ -228,29 +255,54 @@ export class MuseTracker implements Tracker {
 
     // Keep battery + HSI quality metadata because it is still valuable for raw EEG quality checks.
     this.museCore.on('batteryData', (packet: DataPacket) => {
+      const now = Date.now();
       const channels = packet.channels as any;
       if (channels && typeof channels.chargePercentage === 'number') {
         this.lastBatteryLevel = channels.chargePercentage;
+        this.lastBatteryUpdatedAtMs = now;
       } else if (packet.values && packet.values.length > 0) {
         const value = packet.values[0];
         if (typeof value === 'number' && Number.isFinite(value)) {
           this.lastBatteryLevel = value;
+          this.lastBatteryUpdatedAtMs = now;
         }
       }
     });
 
     this.museCore.on('hsiData', (packet: DataPacket) => {
-      if (packet.values && packet.values.length >= 4) {
-        this.lastHsiValues = packet.values.slice(0, 4);
-      } else if (packet.channels) {
-        const ch = packet.channels as any;
-        this.lastHsiValues = [ch.ch0 ?? ch.eeg1 ?? 4, ch.ch1 ?? ch.eeg2 ?? 4, ch.ch2 ?? ch.eeg3 ?? 4, ch.ch3 ?? ch.eeg4 ?? 4];
+      const parsedValues = this.extractHsiValues(packet);
+      if (parsedValues.some((value) => value !== undefined)) {
+        this.lastHsiValues = [
+          parsedValues[0] ?? this.lastHsiValues[0],
+          parsedValues[1] ?? this.lastHsiValues[1],
+          parsedValues[2] ?? this.lastHsiValues[2],
+          parsedValues[3] ?? this.lastHsiValues[3]
+        ];
+        this.lastHsiUpdatedAtMs = Date.now();
+        return;
+      }
+
+      // Some SDK builds provide a single scalar HSI quality value instead of 4 channels.
+      const scalarHsi =
+        (packet.values?.length ?? 0) === 1 ? this.toFiniteNumber(packet.values?.[0]) : undefined;
+      if (scalarHsi !== undefined) {
+        this.lastHsiValues = [scalarHsi, scalarHsi, scalarHsi, scalarHsi];
+        this.lastHsiUpdatedAtMs = Date.now();
       }
     });
 
     // Errors
     this.museCore.on('error', (error: Error) => {
       LOG.error('Muse device error', error);
+    });
+
+    this.museCore.on('discoveryDebug', (payload: any) => {
+      const source = payload?.source ?? 'unknown';
+      const listening = payload?.listening ?? false;
+      const muses = payload?.muses ?? 0;
+      const cached = payload?.cached ?? 0;
+      const preview = payload?.preview ? ` preview=[${payload.preview}]` : '';
+      LOG.info(`[muse-discovery][${source}] listening=${listening} muses=${muses} cached=${cached}${preview}`);
     });
   }
 
@@ -271,6 +323,50 @@ export class MuseTracker implements Tracker {
       default:
         return `UNKNOWN(${state})`;
     }
+  }
+
+  private toFiniteNumber(value: unknown): number | undefined {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const parsed = Number(value.trim());
+      return Number.isFinite(parsed) ? parsed : undefined;
+    }
+
+    return undefined;
+  }
+
+  private extractHsiValues(
+    packet: DataPacket
+  ): [number | undefined, number | undefined, number | undefined, number | undefined] {
+    const values = packet.values?.slice(0, 4).map((value) => this.toFiniteNumber(value));
+    if (values && values.length >= 4) {
+      return [values[0], values[1], values[2], values[3]];
+    }
+
+    const channels = packet.channels as Record<string, unknown> | undefined;
+    if (!channels) {
+      return [undefined, undefined, undefined, undefined];
+    }
+
+    const read = (...keys: string[]): number | undefined => {
+      for (const key of keys) {
+        const parsed = this.toFiniteNumber(channels[key]);
+        if (parsed !== undefined) {
+          return parsed;
+        }
+      }
+      return undefined;
+    };
+
+    const tp9 = read('tp9', 'hsiTp9', 'ch0', 'eeg1');
+    const af7 = read('af7', 'hsiAf7', 'ch1', 'eeg2');
+    const af8 = read('af8', 'hsiAf8', 'ch2', 'eeg3');
+    const tp10 = read('tp10', 'hsiTp10', 'ch3', 'eeg4');
+
+    return [tp9, af7, af8, tp10];
   }
 
   /**
@@ -344,6 +440,7 @@ export class MuseTracker implements Tracker {
       LOG.info(`Stopping ${this.name}...`);
       this.stopRequested = true;
       this.clearReconnectTimer();
+      this.clearPresetReconnectTimer();
 
       // Stop aggregation timer
       if (this.aggregationTimer) {
@@ -391,6 +488,7 @@ export class MuseTracker implements Tracker {
       this.stopRequested = false;
       this.manualDisconnectRequested = false;
       this.clearReconnectTimer();
+      this.clearPresetReconnectTimer();
 
       // Check if device was discovered
       const devices = this.museCore.getDiscoveredDevices();
@@ -400,6 +498,12 @@ export class MuseTracker implements Tracker {
       if (!deviceFound) {
         LOG.warn(`Device ${macAddress} not found in discovered devices`);
       }
+
+      // CRITICAL: macOS SDK requires stopping discovery before connecting.
+      // Connecting while discovery is active causes instability/crashes.
+      // See: libmuse SDK docs and MuseStats example.
+      LOG.debug('Stopping device discovery before connection (macOS SDK requirement)');
+      this.museCore.stopDiscovery();
 
       await this.museCore.connect(macAddress);
       LOG.info(`Connect request sent to device: ${macAddress}`);
@@ -438,6 +542,13 @@ export class MuseTracker implements Tracker {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
+    }
+  }
+
+  private clearPresetReconnectTimer(): void {
+    if (this.presetReconnectTimer) {
+      clearTimeout(this.presetReconnectTimer);
+      this.presetReconnectTimer = null;
     }
   }
 
@@ -593,6 +704,32 @@ export class MuseTracker implements Tracker {
     return this.lastBatteryLevel;
   }
 
+  public getLiveQualitySnapshot(): {
+    batteryLevel?: number;
+    hsiTp9?: number;
+    hsiAf7?: number;
+    hsiAf8?: number;
+    hsiTp10?: number;
+    signalQuality?: number;
+    updatedAtMs: number | null;
+  } {
+    const [hsiTp9, hsiAf7, hsiAf8, hsiTp10] = this.lastHsiValues;
+    const signalQuality = this.computeSignalQualityFromHsi([hsiTp9, hsiAf7, hsiAf8, hsiTp10]);
+    const updatedAtCandidates = [this.lastBatteryUpdatedAtMs, this.lastHsiUpdatedAtMs].filter(
+      (value): value is number => typeof value === 'number' && Number.isFinite(value)
+    );
+
+    return {
+      batteryLevel: this.lastBatteryUpdatedAtMs !== null ? this.lastBatteryLevel : undefined,
+      hsiTp9,
+      hsiAf7,
+      hsiAf8,
+      hsiTp10,
+      signalQuality,
+      updatedAtMs: updatedAtCandidates.length > 0 ? Math.max(...updatedAtCandidates) : null
+    };
+  }
+
   /**
    * Check if native module is available
    */
@@ -632,13 +769,31 @@ export class MuseTracker implements Tracker {
 
   /** Persist buffered raw EEG packets in batch to SQLite. */
   private async aggregateAndSave(): Promise<void> {
+    if (this.aggregateAndSaveInFlight) {
+      return this.aggregateAndSaveInFlight;
+    }
+
+    this.aggregateAndSaveInFlight = this.aggregateAndSaveInternal();
+    try {
+      await this.aggregateAndSaveInFlight;
+    } finally {
+      this.aggregateAndSaveInFlight = null;
+    }
+  }
+
+  private async aggregateAndSaveInternal(): Promise<void> {
     if (!this.isConnected || !this.currentDeviceId) {
       return;
     }
 
     try {
-      const rawEegSamples = this.extractRawEegSamples();
-      const rawOpticsSamples = this.extractRawOpticsSamples();
+      // Drain buffers first so failed writes do not keep retrying the same growing payload.
+      const eegPackets = this.eegBuffer;
+      const opticsPackets = this.opticsBuffer;
+      this.clearAllBuffers();
+
+      const rawEegSamples = this.extractRawEegSamples(eegPackets);
+      const rawOpticsSamples = this.extractRawOpticsSamples(opticsPackets);
 
       if (rawEegSamples.length > 0 || rawOpticsSamples.length > 0) {
         await Promise.all([
@@ -662,7 +817,6 @@ export class MuseTracker implements Tracker {
           this.lastSaveProgressLogMs = now;
         }
       }
-      this.clearAllBuffers();
     } catch (error) {
       LOG.error('Error aggregating and saving Muse data', error);
     }
@@ -683,16 +837,12 @@ export class MuseTracker implements Tracker {
 
   private buildMetadataSample(timestamp: Date): MetadataSample | null {
     const [hsiTp9, hsiAf7, hsiAf8, hsiTp10] = this.lastHsiValues;
-    const hsiValues = [hsiTp9, hsiAf7, hsiAf8, hsiTp10].filter(
-      (value) => typeof value === 'number' && Number.isFinite(value)
-    ) as number[];
-
-    const signalQuality =
-      hsiValues.length > 0 ? hsiValues.reduce((worst, value) => Math.max(worst, value), 0) : undefined;
+    const signalQuality = this.computeSignalQualityFromHsi([hsiTp9, hsiAf7, hsiAf8, hsiTp10]);
+    const batteryLevel = this.lastBatteryUpdatedAtMs !== null ? this.lastBatteryLevel : undefined;
 
     const metadata: MetadataSample = {
       timestamp,
-      batteryLevel: this.lastBatteryLevel,
+      batteryLevel,
       hsiTp9,
       hsiAf7,
       hsiAf8,
@@ -711,6 +861,13 @@ export class MuseTracker implements Tracker {
     return hasAnyValue ? metadata : null;
   }
 
+  private computeSignalQualityFromHsi(
+    values: Array<number | undefined>
+  ): number | undefined {
+    const valid = values.filter((value) => typeof value === 'number' && Number.isFinite(value)) as number[];
+    return valid.length > 0 ? valid.reduce((worst, value) => Math.max(worst, value), 0) : undefined;
+  }
+
   private hasMetadataChanged(current: MetadataSample, previous: MetadataSample | null): boolean {
     if (!previous) {
       return true;
@@ -727,14 +884,14 @@ export class MuseTracker implements Tracker {
     );
   }
 
-  private extractRawEegSamples(): RawEegSample[] {
+  private extractRawEegSamples(sourceBuffer: DataPacket[] = this.eegBuffer): RawEegSample[] {
     if (!this.isConnected) {
       return [];
     }
 
     const samples: RawEegSample[] = [];
 
-    for (const packet of this.eegBuffer) {
+    for (const packet of sourceBuffer) {
       if (!packet.channels) {
         continue;
       }
@@ -766,14 +923,14 @@ export class MuseTracker implements Tracker {
     return samples;
   }
 
-  private extractRawOpticsSamples(): RawOpticsSample[] {
+  private extractRawOpticsSamples(sourceBuffer: DataPacket[] = this.opticsBuffer): RawOpticsSample[] {
     if (!this.isConnected) {
       return [];
     }
 
     const samples: RawOpticsSample[] = [];
 
-    for (const packet of this.opticsBuffer) {
+    for (const packet of sourceBuffer) {
       const channels = packet.channels as any;
       const values = packet.values;
 

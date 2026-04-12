@@ -39,6 +39,7 @@ module.exports = {
     owner: 'Grizzlytron',
     repo: 'Muselytics'
   },
+  afterPack: 'scripts/ensure-mac-bluetooth-plist.cjs',
   ...(enableMacSigning ? { afterSign: 'scripts/notarize.cjs' } : {}), // Only notarize if explicitly enabled, as no tokens for signing currently available
   mac: {
     identity: null,  
@@ -50,20 +51,16 @@ module.exports = {
     hardenedRuntime: false,
     gatekeeperAssess: false,
     notarize: false,
-    extendInfo: [
-      {
-        key: 'NSAppleEventsUsageDescription',
-        value: 'Please allow access to use the application.'
-      },
-      {
-        key: 'NSDocumentsFolderUsageDescription',
-        value: 'Please allow access to use the application.'
-      },
-      {
-        key: 'NSDownloadsFolderUsageDescription',
-        value: 'Please allow access to use the application.'
-      }
-    ]
+    // macOS terminates apps that access Bluetooth without a usage description.
+    extendInfo: {
+      NSAppleEventsUsageDescription: 'Please allow access to use the application.',
+      NSDocumentsFolderUsageDescription: 'Please allow access to use the application.',
+      NSDownloadsFolderUsageDescription: 'Please allow access to use the application.',
+      NSBluetoothAlwaysUsageDescription:
+        'PersonalAnalytics needs Bluetooth access to discover and connect to your Muse device.',
+      NSBluetoothPeripheralUsageDescription:
+        'PersonalAnalytics needs Bluetooth access to discover and connect to your Muse device.'
+    }
   },
   dmg: {
     writeUpdateInfo: false

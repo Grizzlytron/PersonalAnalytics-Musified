@@ -77,6 +77,7 @@ type Commands = {
       signalQuality: number | null;
       battery: number;
     } | null;
+    qualityUpdatedAtMs: number | null;
     uiSampleIntervalMs: number;
     latestData: Array<{
       id: number;
@@ -93,6 +94,11 @@ type Commands = {
       hsiTp10?: number;
       connectionState?: string;
     }>;
+    totalDataPoints: number;
+    trackedMinutes: number;
+    averageSignalQuality: number;
+  }>;
+  'muse:get-summary-metrics': () => Promise<{
     totalDataPoints: number;
     trackedMinutes: number;
     averageSignalQuality: number;

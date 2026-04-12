@@ -2,12 +2,9 @@
   <div class="flex h-full w-full flex-col bg-base-100">
     <!-- Header -->
     <div class="border-b border-base-300 bg-base-200 p-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="flex items-center gap-2 text-2xl font-bold">🧠 Muse Tracker</h1>
-          <p class="text-sm text-base-content/60">Real-time Muse EEG data</p>
-        </div>
-        <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h1 class="flex items-center gap-2 whitespace-nowrap text-2xl font-bold">🧠 Muse Tracker</h1>
+        <div class="flex flex-wrap items-center justify-end gap-3">
           <div class="badge badge-lg" :class="isTrackerRunning ? 'badge-success' : 'badge-error'">
             {{ isTrackerRunning ? '● Active' : '○ Inactive' }}
           </div>
@@ -139,7 +136,7 @@
                     <span class="loading loading-spinner loading-xs"></span> Scanning for devices...
                   </p>
                   <p v-else class="text-base-content/60">Start tracking to scan</p>
-                  <p class="text-base-content/40">Make sure your Muse device is in pairing mode</p>
+                  <p class="text-base-content/40">Make sure your Muse device is turned on</p>
                 </div>
               </div>
 
@@ -263,13 +260,7 @@
         <div class="card bg-base-200 shadow-xl">
           <div class="card-body flex flex-col">
             <div class="flex items-center justify-between">
-              <h3 class="card-title">📊 Real-time EEG Channels</h3>
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="badge badge-primary">TP9 (Left Ear)</span>
-                <span class="badge badge-secondary">AF7 (Left Forehead)</span>
-                <span class="badge badge-accent">AF8 (Right Forehead)</span>
-                <span class="badge badge-info">TP10 (Right Ear)</span>
-              </div>
+              <h3 class="card-title whitespace-nowrap">Real-time EEG data</h3>
             </div>
             <div class="h-96">
               <Line
@@ -425,6 +416,7 @@ const selectedDeviceMac = ref<string>('');
 const isConnecting = ref(false);
 const eegWindowAnchorMs = ref<number | null>(null);
 const nowMs = ref(Date.now());
+const qualityUpdatedAtMs = ref<number | null>(null);
 let refreshInterval: ReturnType<typeof setInterval> | null = null;
 let lastDataHash = ''; // track whether EEG data actually changed
 
@@ -468,9 +460,13 @@ const latestHsiMax = computed<number | null>(() => {
 });
 
 const hasRecentSignal = computed(() => {
+  const explicitQualityTs = qualityUpdatedAtMs.value;
+  if (typeof explicitQualityTs === 'number' && Number.isFinite(explicitQualityTs)) {
+    return nowMs.value - explicitQualityTs <= SIGNAL_RECENT_WINDOW_MS;
+  }
+
   const sample = latestQualitySample.value;
   if (!sample) return false;
-
   const sampleTime = new Date(sample.timestamp).getTime();
   if (!Number.isFinite(sampleTime)) return false;
 
@@ -521,6 +517,7 @@ const eegWindowState = computed(() => {
     return {
       anchorTs: Date.now(),
       latestTs: Date.now(),
+      windowEndTs: Date.now(),
       elapsedMs: 0,
       isRolling: false
     };
@@ -528,13 +525,18 @@ const eegWindowState = computed(() => {
 
   const firstTs = new Date(latestData.value[0].timestamp).getTime();
   const latestTs = new Date(latestData.value[latestData.value.length - 1].timestamp).getTime();
-  const anchorTs = eegWindowAnchorMs.value ?? firstTs;
-  const elapsedMs = Math.max(0, latestTs - anchorTs);
+  // Use wall-clock time while running so the window fills smoothly even if incoming timestamps are bursty.
+  const windowEndTs = isTrackerRunning.value ? Math.max(latestTs, nowMs.value) : latestTs;
+  const requestedAnchorTs = eegWindowAnchorMs.value ?? firstTs;
+  // Keep anchor inside the visible data range to prevent empty chart windows.
+  const anchorTs = Math.min(Math.max(requestedAnchorTs, firstTs), windowEndTs);
+  const elapsedMs = Math.max(0, windowEndTs - anchorTs);
   const isRolling = elapsedMs >= CHART_PAGE_SECONDS * 1000;
 
   return {
     anchorTs,
     latestTs,
+    windowEndTs,
     elapsedMs,
     isRolling
   };
@@ -550,59 +552,72 @@ const eegChartData = computed(() => {
 
   const pageMs = CHART_PAGE_SECONDS * 1000;
   const latestTs = eegWindowState.value.latestTs;
+  const windowEndTs = eegWindowState.value.windowEndTs;
   const anchorTs = eegWindowState.value.anchorTs;
-  const pageStartTs = eegWindowIsRolling.value ? latestTs - pageMs : anchorTs;
+  const pageStartTs = eegWindowIsRolling.value ? windowEndTs - pageMs : anchorTs;
 
   const pageData = latestData.value.filter((d) => {
-    const ts = new Date(d.timestamp).getTime();
-    return ts >= pageStartTs && ts <= latestTs;
+    const ts = d.timestamp.getTime();
+    return ts >= pageStartTs && ts <= windowEndTs;
   });
 
-  const toPoint = (timestamp: Date, value: number | undefined) => ({
-    x: (new Date(timestamp).getTime() - pageStartTs) / 1000,
-    y: value ?? 0
-  });
+  // If the time-window filter yields nothing (e.g. nowMs advanced beyond data),
+  // fall back to the full dataset so the chart keeps rendering.
+  const visibleData = pageData.length > 0 ? pageData : latestData.value;
+
+  const toPoint = (timestamp: Date, value: number | undefined) => {
+    const ageMs = windowEndTs - timestamp.getTime();
+    return {
+      // Plot elapsed-window age so the newest sample is 0s.
+      x: Math.min(CHART_PAGE_SECONDS, Math.max(0, ageMs / 1000)),
+      y: typeof value === 'number' && Number.isFinite(value) ? value : null
+    };
+  };
 
   return {
     labels: [],
     datasets:
-      pageData.length > 0
+      visibleData.length > 0
         ? [
             {
               label: 'TP9 (Left Ear)',
-              data: pageData.map((d) => toPoint(d.timestamp, d.channel1_TP9)),
+              data: visibleData.map((d) => toPoint(d.timestamp, d.channel1_TP9)),
               borderColor: 'rgb(99, 102, 241)',
               backgroundColor: 'rgba(99, 102, 241, 0.1)',
               tension: 0.3,
               fill: false,
-              pointRadius: 0
+              pointRadius: 0,
+              spanGaps: true
             },
             {
               label: 'AF7 (Left Forehead)',
-              data: pageData.map((d) => toPoint(d.timestamp, d.channel2_AF7)),
+              data: visibleData.map((d) => toPoint(d.timestamp, d.channel2_AF7)),
               borderColor: 'rgb(236, 72, 153)',
               backgroundColor: 'rgba(236, 72, 153, 0.1)',
               tension: 0.3,
               fill: false,
-              pointRadius: 0
+              pointRadius: 0,
+              spanGaps: true
             },
             {
               label: 'AF8 (Right Forehead)',
-              data: pageData.map((d) => toPoint(d.timestamp, d.channel3_AF8)),
+              data: visibleData.map((d) => toPoint(d.timestamp, d.channel3_AF8)),
               borderColor: 'rgb(34, 211, 238)',
               backgroundColor: 'rgba(34, 211, 238, 0.1)',
               tension: 0.3,
               fill: false,
-              pointRadius: 0
+              pointRadius: 0,
+              spanGaps: true
             },
             {
               label: 'TP10 (Right Ear)',
-              data: pageData.map((d) => toPoint(d.timestamp, d.channel4_TP10)),
+              data: visibleData.map((d) => toPoint(d.timestamp, d.channel4_TP10)),
               borderColor: 'rgb(74, 222, 128)',
               backgroundColor: 'rgba(74, 222, 128, 0.1)',
               tension: 0.3,
               fill: false,
-              pointRadius: 0
+              pointRadius: 0,
+              spanGaps: true
             }
           ]
         : []
@@ -619,6 +634,7 @@ const eegChartOptions = computed(() => {
         type: 'linear' as const,
         min: 0,
         max: CHART_PAGE_SECONDS,
+        reverse: true,
         display: true,
         title: { display: true, text: 'Elapsed Window Time (s)' },
         ticks: {
@@ -634,8 +650,8 @@ const eegChartOptions = computed(() => {
       y: {
         display: true,
         title: { display: true, text: 'Amplitude (uV)' },
-        min: EEG_DISPLAY_MIN_UV,
-        max: EEG_DISPLAY_MAX_UV,
+        min: 300,
+        max: 1000,
         ticks: {
           stepSize: 100
         }
@@ -662,8 +678,8 @@ onUnmounted(() => {
 
 watch(activeTab, async () => {
   if (activeTab.value === 'eeg') {
-    // Start a fresh visible timeline when opening EEG tab.
-    eegWindowAnchorMs.value = Date.now();
+    // Let the anchor snap to current data bounds once samples arrive.
+    eegWindowAnchorMs.value = null;
   }
   // Immediately refresh when switching tabs, then adjust poll cadence.
   await loadData();
@@ -678,6 +694,11 @@ function startPolling() {
   refreshInterval = setInterval(loadData, intervalMs);
 }
 
+function toValidDate(value: unknown): Date | null {
+  const parsed = new Date(value as any);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
+
 async function loadData() {
   try {
     nowMs.value = Date.now();
@@ -687,28 +708,64 @@ async function loadData() {
     if (data) {
       isTrackerRunning.value = data.isRunning;
       connectedDevice.value = data.connectedDevice || null;
-      trackedMinutes.value = data.trackedMinutes || 0;
+      qualityUpdatedAtMs.value =
+        typeof data.qualityUpdatedAtMs === 'number' && Number.isFinite(data.qualityUpdatedAtMs)
+          ? data.qualityUpdatedAtMs
+          : null;
 
       // Only update latestData when the data actually changed to avoid
       // unnecessary Chart.js re-renders that cause freezes
       const incoming = data.latestData || [];
+      const latestTsRaw = incoming.length > 0 ? toValidDate(incoming[incoming.length - 1]?.timestamp) : null;
+      const latestTs = latestTsRaw ? latestTsRaw.getTime() : -1;
+      const latestIncoming = incoming.length > 0 ? incoming[incoming.length - 1] : null;
+      const qualityHash = [
+        data.connectedDevice?.signalQuality ?? 'x',
+        data.connectedDevice?.battery ?? 'x',
+        latestIncoming?.signalQuality ?? 'x',
+        latestIncoming?.hsiTp9 ?? 'x',
+        latestIncoming?.hsiAf7 ?? 'x',
+        latestIncoming?.hsiAf8 ?? 'x',
+        latestIncoming?.hsiTp10 ?? 'x',
+        qualityUpdatedAtMs.value ?? 'x'
+      ].join('-');
       const newHash =
         incoming.length > 0
-          ? `${incoming.length}-${incoming[0]?.id}-${incoming[incoming.length - 1]?.id}`
-          : '0';
+          ? `${incoming.length}-${incoming[0]?.id}-${incoming[incoming.length - 1]?.id}-${latestTs}-${qualityHash}`
+          : `0-${qualityHash}`;
       if (newHash !== lastDataHash) {
         lastDataHash = newHash;
-        const mapped = incoming.map((d: any) => ({
-          ...d,
-          timestamp: new Date(d.timestamp)
-        }));
+        const mapped = incoming
+          .map((d: any) => {
+            const parsedTimestamp = toValidDate(d.timestamp);
+            if (!parsedTimestamp) {
+              return null;
+            }
+
+            return {
+              ...d,
+              timestamp: parsedTimestamp
+            };
+          })
+          .filter((d): d is MuseData => d !== null);
         latestData.value = mapped;
 
         if (activeTab.value === 'eeg' && mapped.length > 0 && eegWindowAnchorMs.value === null) {
-          eegWindowAnchorMs.value = new Date(mapped[0].timestamp).getTime();
+          eegWindowAnchorMs.value = mapped[0].timestamp.getTime();
         }
       }
 
+    }
+
+    // Keep dense EEG polling lightweight by moving aggregate metrics to a separate endpoint
+    // and only refreshing them outside the EEG tab.
+    if (!includeDenseData) {
+      try {
+        const metrics = await typedIpcRenderer.invoke('muse:get-summary-metrics');
+        trackedMinutes.value = metrics?.trackedMinutes || 0;
+      } catch (err) {
+        console.warn('Error loading Muse summary metrics:', err);
+      }
     }
 
     // Discovery list is only needed on the connection tab.
@@ -731,7 +788,7 @@ async function startTracking() {
   try {
     await typedIpcRenderer.invoke('muse:start-tracker');
     isTrackerRunning.value = true;
-    eegWindowAnchorMs.value = Date.now();
+    eegWindowAnchorMs.value = null;
   } catch (error) {
     console.error('Error starting tracker:', error);
   }

@@ -20,7 +20,7 @@ const studyConfig: StudyConfiguration = {
     enabled: true,
     title: 'Space Crusaders',
     description:
-      "Hello Captain! The Situation is pressing and we need your help. We are currently flying on an intergalactic spaceship while galactic monsters are chasing us across the galaxy. Your mission is to outrun them across 5 levels by making precise gate decisions under pressure. You need to decide when to boost our engine through a gate by pressing J only when the level rule says the gate is open; if it is not open, do not press anything. Watch your Speed Bar: correct gate presses increase your speed, while incorrect presses slow you down and increase the chance of being caught and eaten by the monsters. After each level Mission Control will ask you two self-reflection questions, answer them as truthfully as possible based on your perception of the previous level you completed. Good luck, Captain!",
+      "Hello Captain! The Situation is pressing and we need your help. We are currently flying on an intergalactic spaceship while galactic monsters are chasing us across the galaxy. Your mission is to outrun them across 5 levels by making precise gate decisions under pressure. You need to decide when to boost our engine through a gate by pressing J only when the level rule says the gate is open; if it is not open, do not press anything. Watch your Speed Bar: correct guesses give a speed boost, while incorrect guesses cause a speed drop and increase the chance of being caught and eaten by the monsters. After each level, we enter a worm hole that warps us to one of the remaining difficulty levels in random order. Before this, Mission Control will ask you two self-reflection questions. Good luck, Captain!",
     scale: 7,
     tasks: [
       {

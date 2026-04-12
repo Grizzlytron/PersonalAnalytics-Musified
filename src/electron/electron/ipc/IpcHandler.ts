@@ -38,6 +38,8 @@ export class IpcHandler {
   private readonly windowService: WindowService;
   private readonly trackerService: TrackerService;
   private readonly MUSE_STATUS_METRICS_REFRESH_MS = 30000;
+  private readonly MUSE_DENSE_EEG_WINDOW_ROWS = 9000;
+  private readonly MUSE_LIGHT_EEG_WINDOW_ROWS = 600;
   private museStatusMetrics = {
     lastRefreshedAt: 0,
     totalDataPoints: 0,
@@ -108,6 +110,7 @@ export class IpcHandler {
       openRetrospection: this.openRetrospection,
       closeRetrospectionWindow: this.closeRetrospectionWindow,
       'muse:get-tracker-status': this.getMuseTrackerStatus,
+      'muse:get-summary-metrics': this.getMuseSummaryMetrics,
       'muse:start-tracker': this.startMuseTracker,
       'muse:stop-tracker': this.stopMuseTracker,
       'muse:get-data-for-export': this.getMuseDataForExport,
@@ -434,20 +437,24 @@ export class IpcHandler {
     raw: Array<{ id: number; timestamp: Date; tp9: number; af7: number; af8: number; tp10: number }>,
     sampleIntervalMs: number
   ): Array<{ id: number; timestamp: Date; tp9: number; af7: number; af8: number; tp10: number }> {
-    if (raw.length <= 1) {
-      return raw;
+    const validSamples = raw.filter((sample) => Number.isFinite(new Date(sample.timestamp).getTime()));
+    if (validSamples.length <= 1) {
+      return validSamples;
     }
 
-    const sorted = [...raw].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-
-    const buckets = new Map<number, (typeof sorted)[number]>();
-    for (const sample of sorted) {
+    const buckets = new Map<number, (typeof raw)[number]>();
+    for (const sample of validSamples) {
       const ts = new Date(sample.timestamp).getTime();
+      if (!Number.isFinite(ts)) {
+        continue;
+      }
       const bucket = Math.floor(ts / sampleIntervalMs) * sampleIntervalMs;
       // Keep latest sample in each 500ms bucket.
       buckets.set(bucket, sample);
+    }
+
+    if (buckets.size === 0) {
+      return [];
     }
 
     return Array.from(buckets.entries())
@@ -462,33 +469,90 @@ export class IpcHandler {
       const runningTrackers = this.trackerService.getRunningTrackerNames();
       const isMuseRunning = runningTrackers.includes('MuseTracker');
       const tracker = this.trackerService.getTracker('MuseTracker') as any;
+      const isConnected = !!tracker?.isDeviceConnected?.();
+
+      // Fast-path for disconnected/inactive states to avoid unnecessary DB work on status polls.
+      if (!isMuseRunning || !isConnected) {
+        return {
+          isRunning: isMuseRunning,
+          connectedDevice: null,
+          qualityUpdatedAtMs: null,
+          uiSampleIntervalMs: sampleIntervalMs,
+          latestData: [],
+          totalDataPoints: this.museStatusMetrics.totalDataPoints,
+          trackedMinutes: this.museStatusMetrics.trackedMinutes,
+          averageSignalQuality: 0
+        };
+      }
 
       // Pull a recent raw window and downsample to 500ms excerpts for UI responsiveness.
       // Non-EEG tabs request a lighter dataset to reduce CPU/IO load.
-      const rawWindowSize = includeDenseData ? 10000 : 800;
+      // Muse raw EEG is ~256Hz; ~9000 rows keeps around 35s so the 30s UI window can render fully.
+      const rawWindowSize = includeDenseData
+        ? this.MUSE_DENSE_EEG_WINDOW_ROWS
+        : this.MUSE_LIGHT_EEG_WINDOW_ROWS;
       const museService = new MuseTrackerService();
-      const recentRawData = await museService.getMostRecentRawEegData(rawWindowSize);
+      const recentRawData = await museService.getMostRecentRawEegDataAsc(rawWindowSize);
       const latestData = this.downsampleRawEegForUi(recentRawData, sampleIntervalMs);
       const latestMetadata = await museService.getLatestMetadata();
+      const liveQuality = tracker?.getLiveQualitySnapshot?.();
+
+      const pickFinite = (...values: Array<number | null | undefined>): number | undefined => {
+        for (const value of values) {
+          if (typeof value === 'number' && Number.isFinite(value)) {
+            return value;
+          }
+        }
+        return undefined;
+      };
+
+      const qualitySnapshot = {
+        batteryLevel: pickFinite(liveQuality?.batteryLevel, latestMetadata?.batteryLevel),
+        signalQuality: pickFinite(liveQuality?.signalQuality, latestMetadata?.signalQuality),
+        hsiTp9: pickFinite(liveQuality?.hsiTp9, latestMetadata?.hsiTp9),
+        hsiAf7: pickFinite(liveQuality?.hsiAf7, latestMetadata?.hsiAf7),
+        hsiAf8: pickFinite(liveQuality?.hsiAf8, latestMetadata?.hsiAf8),
+        hsiTp10: pickFinite(liveQuality?.hsiTp10, latestMetadata?.hsiTp10)
+      };
+      const qualityUpdatedAtMs =
+        (typeof liveQuality?.updatedAtMs === 'number' && Number.isFinite(liveQuality.updatedAtMs)
+          ? liveQuality.updatedAtMs
+          : undefined) ??
+        (() => {
+          if (!latestMetadata?.timestamp) {
+            return undefined;
+          }
+          const ts = new Date(latestMetadata.timestamp).getTime();
+          return Number.isFinite(ts) ? ts : undefined;
+        })() ??
+        (() => {
+          if (latestData.length === 0) {
+            return undefined;
+          }
+          const ts = new Date(latestData[latestData.length - 1].timestamp).getTime();
+          return Number.isFinite(ts) ? ts : undefined;
+        })() ??
+        null;
 
       // Refresh heavy aggregate metrics only occasionally to keep UI polling smooth
       // even when the EEG table grows large.
-      await this.refreshMuseStatusMetrics(museService);
+      if (!includeDenseData) {
+        await this.refreshMuseStatusMetrics(museService);
+      }
 
       // Get connected device (single device) using live tracker state when available
       let connectedDevice = null;
-      const isConnected = !!tracker?.isDeviceConnected?.();
       if (isConnected) {
         const connectedInfo = tracker?.getConnectedDevice?.();
         connectedDevice = {
           name: connectedInfo?.name || 'Unknown',
-          signalQuality: latestMetadata?.signalQuality ?? null,
-          battery: tracker?.getBatteryLevel?.() ?? latestMetadata?.batteryLevel ?? 0
+          signalQuality: qualitySnapshot.signalQuality ?? null,
+          battery: qualitySnapshot.batteryLevel ?? tracker?.getBatteryLevel?.() ?? 0
         };
       }
 
       let avgQuality = 0;
-      const qualityValues = [latestMetadata?.signalQuality].filter(
+      const qualityValues = [qualitySnapshot.signalQuality].filter(
         (q): q is number => typeof q === 'number' && Number.isFinite(q)
       );
       if (qualityValues.length > 0) {
@@ -500,6 +564,7 @@ export class IpcHandler {
       return {
         isRunning: isMuseRunning,
         connectedDevice: connectedDevice,
+        qualityUpdatedAtMs,
         uiSampleIntervalMs: sampleIntervalMs,
         latestData: latestData.map((d) => ({
           id: d.id,
@@ -508,12 +573,12 @@ export class IpcHandler {
           channel2_AF7: d.af7,
           channel3_AF8: d.af8,
           channel4_TP10: d.tp10,
-          batteryLevel: latestMetadata?.batteryLevel,
-          signalQuality: latestMetadata?.signalQuality,
-          hsiTp9: latestMetadata?.hsiTp9,
-          hsiAf7: latestMetadata?.hsiAf7,
-          hsiAf8: latestMetadata?.hsiAf8,
-          hsiTp10: latestMetadata?.hsiTp10,
+          batteryLevel: qualitySnapshot.batteryLevel,
+          signalQuality: qualitySnapshot.signalQuality,
+          hsiTp9: qualitySnapshot.hsiTp9,
+          hsiAf7: qualitySnapshot.hsiAf7,
+          hsiAf8: qualitySnapshot.hsiAf8,
+          hsiTp10: qualitySnapshot.hsiTp10,
           connectionState: 'connected'
         })),
         totalDataPoints: this.museStatusMetrics.totalDataPoints,
@@ -527,6 +592,37 @@ export class IpcHandler {
         connectedDevice: null,
         latestData: [],
         totalDataPoints: 0,
+        averageSignalQuality: 0
+      };
+    }
+  }
+
+  private async getMuseSummaryMetrics(): Promise<{
+    totalDataPoints: number;
+    trackedMinutes: number;
+    averageSignalQuality: number;
+  }> {
+    try {
+      const museService = new MuseTrackerService();
+      await this.refreshMuseStatusMetrics(museService);
+
+      const latestMetadata = await museService.getLatestMetadata();
+      const avgQuality =
+        typeof latestMetadata?.signalQuality === 'number' &&
+        Number.isFinite(latestMetadata.signalQuality)
+          ? latestMetadata.signalQuality
+          : 0;
+
+      return {
+        totalDataPoints: this.museStatusMetrics.totalDataPoints,
+        trackedMinutes: this.museStatusMetrics.trackedMinutes,
+        averageSignalQuality: avgQuality
+      };
+    } catch (error) {
+      LOG.error('Error getting Muse summary metrics', error);
+      return {
+        totalDataPoints: 0,
+        trackedMinutes: 0,
         averageSignalQuality: 0
       };
     }

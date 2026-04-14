@@ -29,6 +29,15 @@ const showSelfReporting = es.enabled === true;
 .settings-container {
   display: flex;
   height: 100vh;
+  background-color: white;
+  color: #1f2937;
+}
+
+@media (prefers-color-scheme: dark) {
+  .settings-container {
+    background-color: #1f2937;
+    color: #e5e7eb;
+  }
 }
 
 .sidenav {
@@ -63,5 +72,6 @@ const showSelfReporting = es.enabled === true;
 .content {
   flex: 1;
   padding: 20px;
+  overflow-y: auto;
 }
 </style>

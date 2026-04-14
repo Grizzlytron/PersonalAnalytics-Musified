@@ -7,6 +7,7 @@ import ExperienceSamplingDto from '../../shared/dto/ExperienceSamplingDto';
 import { WorkHoursDto } from '../../shared/dto/WorkHoursDto';
 import { Settings } from 'electron/main';
 import type { NBackTaskBlockDto } from '../../shared/dto/NBackTaskBlockDto';
+import type { ExperienceSamplingAnswerType } from '../../shared/StudyConfiguration';
 
 type Commands = {
   createExperienceSample: (
@@ -14,12 +15,14 @@ type Commands = {
     question1: string,
     responseOptions1: string,
     question2: string,
-    responseOptions2: string,
-    scale: number,
+    answerType: ExperienceSamplingAnswerType,
+    responseOptions2: string | null,
+    scale?: number | null,
     response1?: number,
-    response2?: number,
+    response2?: string,
     skipped?: boolean
   ) => Promise<void>;
+  resizeExperienceSamplingWindow: (height: number) => void;
   closeExperienceSamplingWindow: (skippedExperienceSampling: boolean) => void;
   openNBackWindow: () => Promise<void>;
   closeNBackWindow: (source?: string) => void;
@@ -58,9 +61,15 @@ type Commands = {
   revealItemInFolder: (path: string) => Promise<void>;
   openUploadUrl: () => void;
   showDataExportError: (errorMessage?: string) => void;
+  confirmDDLUpload: () => Promise<boolean>;
   startAllTrackers: () => void;
   triggerPermissionCheckAccessibility: (prompt: boolean) => boolean;
   triggerPermissionCheckScreenRecording: () => boolean;
+  retrospectionGetActivities: (date: Date) => Promise<any[]>;
+  retrospectionLoadLongestTimeActive: (date: Date) => Promise<any>;
+  retrospectionGetTopThreeMostActiveApps: (date: Date) => Promise<any[]>;
+  openRetrospection: () => Promise<void>;
+  closeRetrospectionWindow: () => void;
   'muse:get-tracker-status': (includeDenseData?: boolean) => Promise<{
     isRunning: boolean;
     connectedDevice: {

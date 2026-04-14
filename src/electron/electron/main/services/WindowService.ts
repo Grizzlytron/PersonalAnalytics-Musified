@@ -1,26 +1,16 @@
-import {
-  app,
-  BrowserWindow,
-  clipboard,
-  dialog,
-  Menu,
-  nativeImage,
-  screen,
-  shell,
-  Tray
-} from 'electron';
-import getMainLogger from '../../config/Logger';
-import AppUpdaterService from './AppUpdaterService';
-import { is } from './utils/helpers';
-import path from 'path';
-import MenuItemConstructorOptions = Electron.MenuItemConstructorOptions;
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import studyConfig from '../../../shared/study.config';
-import { DataExportFormat } from '../../../shared/DataExportFormat.enum';
-import { UsageDataService } from './UsageDataService';
-import { UsageDataEventType } from '../../enums/UsageDataEventType.enum';
-import { Settings } from '../entities/Settings';
+import { app, BrowserWindow, clipboard, dialog, Menu, nativeImage, nativeTheme, screen, shell, Tray } from 'electron'
+import getMainLogger from '../../config/Logger'
+import AppUpdaterService from './AppUpdaterService'
+import { is } from './utils/helpers'
+import path from 'path'
+import MenuItemConstructorOptions = Electron.MenuItemConstructorOptions
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import studyConfig from '../../../shared/study.config'
+import { DataExportFormat } from '../../../shared/DataExportFormat.enum'
+import { UsageDataService } from './UsageDataService'
+import { UsageDataEventType } from '../../enums/UsageDataEventType.enum'
+import { Settings } from '../entities/Settings'
 
 const LOG = getMainLogger('WindowService');
 
@@ -52,6 +42,7 @@ export class WindowService {
   private nBackWindow: BrowserWindow;
   private nBackCloseSource: NBackCloseSource = 'unknown';
   private nBackSessionContext: NBackSessionContext = {};
+  private retrospectionWindow: BrowserWindow
 
   private hasOpenedDataExportUrl: boolean = false;
   private hasRevealedDataEportFolder: boolean = false;
@@ -108,6 +99,7 @@ export class WindowService {
       show: false,
       opacity: 0,
       frame: false,
+      backgroundColor: nativeTheme.shouldUseDarkColors ? '#1f2937' : '#ffffff',
       alwaysOnTop: true,
       visualEffectState: 'inactive',
       minimizable: false,
@@ -145,6 +137,24 @@ export class WindowService {
     });
   }
 
+  public resizeExperienceSamplingWindow(height: number) {
+    if (this.experienceSamplingWindow) {
+      const minHeight = 120
+      const maxHeight = 600
+      const clamped = Math.max(minHeight, Math.min(maxHeight, height))
+      this.experienceSamplingWindow.setContentSize(500, clamped)
+    }
+  }
+
+  public resizeExperienceSamplingWindow(height: number) {
+    if (this.experienceSamplingWindow) {
+      const minHeight = 120
+      const maxHeight = 600
+      const clamped = Math.max(minHeight, Math.min(maxHeight, height))
+      this.experienceSamplingWindow.setContentSize(500, clamped)
+    }
+  }
+
   public closeExperienceSamplingWindow(skippedExperienceSampling: boolean) {
     const usageDataEvent = skippedExperienceSampling
       ? UsageDataEventType.ExperienceSamplingSkipped
@@ -174,6 +184,7 @@ export class WindowService {
       width: 1000,
       height: 850,
       show: false,
+      backgroundColor: nativeTheme.shouldUseDarkColors ? '#1f2937' : '#ffffff',
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
@@ -260,6 +271,96 @@ export class WindowService {
     if (this.dataExportWindow) {
       this.dataExportWindow.close();
     }
+  }
+
+  public closeRetrospectionWindow() {
+    if (this.retrospectionWindow) {
+      this.retrospectionWindow.close()
+      this.retrospectionWindow = null
+    }
+  }
+
+  public async createRetrospectionWindow() {
+    this.closeRetrospectionWindow()
+
+    const __filename = fileURLToPath(import.meta.url)
+    const __dirname = dirname(__filename)
+    const preload = join(__dirname, '../preload/index.mjs')
+
+    this.retrospectionWindow = new BrowserWindow({
+      width: 850,
+      height: 800,
+      minWidth: 800,
+      minHeight: 750,
+      show: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      resizable: true,
+      title: 'PersonalAnalytics: Retrospection',
+      webPreferences: {
+        preload
+      }
+    })
+
+    if (process.env.VITE_DEV_SERVER_URL) {
+      await this.retrospectionWindow.loadURL(process.env.VITE_DEV_SERVER_URL + '#retrospection')
+    } else {
+      await this.retrospectionWindow.loadFile(path.join(process.env.DIST, 'index.html'), {
+        hash: 'retrospection'
+      })
+    }
+
+    this.retrospectionWindow.show()
+
+    this.retrospectionWindow.on('close', () => {
+      this.retrospectionWindow = null
+    })
+  }
+
+  public closeRetrospectionWindow() {
+    if (this.retrospectionWindow) {
+      this.retrospectionWindow.close()
+      this.retrospectionWindow = null
+    }
+  }
+
+  public async createRetrospectionWindow() {
+    this.closeRetrospectionWindow()
+
+    const __filename = fileURLToPath(import.meta.url)
+    const __dirname = dirname(__filename)
+    const preload = join(__dirname, '../preload/index.mjs')
+
+    this.retrospectionWindow = new BrowserWindow({
+      width: 850,
+      height: 800,
+      minWidth: 800,
+      minHeight: 750,
+      show: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      resizable: true,
+      title: 'PersonalAnalytics: Retrospection',
+      webPreferences: {
+        preload
+      }
+    })
+
+    if (process.env.VITE_DEV_SERVER_URL) {
+      await this.retrospectionWindow.loadURL(process.env.VITE_DEV_SERVER_URL + '#retrospection')
+    } else {
+      await this.retrospectionWindow.loadFile(path.join(process.env.DIST, 'index.html'), {
+        hash: 'retrospection'
+      })
+    }
+
+    this.retrospectionWindow.show()
+
+    this.retrospectionWindow.on('close', () => {
+      this.retrospectionWindow = null
+    })
   }
 
   private destroyDataExportWindow() {
@@ -651,11 +752,16 @@ export class WindowService {
         visible: showSelfReportMenu
       },
       {
-        label: 'Open Settings',
+        label: 'Retrospection',
+        click: () => this.createRetrospectionWindow(),
+        visible: studyConfig.enableRetrospection ?? true
+      },
+      {
+        label: 'Settings',
         click: () => this.createSettingsWindow()
       },
       {
-        label: 'Open Onboarding',
+        label: 'Onboarding',
         click: () => this.createOnboardingWindow(),
         visible: is.dev
       },
@@ -668,7 +774,15 @@ export class WindowService {
         click: () => this.createNBackWindow()
       },
       {
-        label: 'Open Study Data Export',
+        label: 'Open Muse Interface',
+        click: () => this.createMuseWindow()
+      },
+      {
+        label: 'Open Study Tasks',
+        click: () => this.createNBackWindow()
+      },
+      {
+        label: 'Study Data Export',
         click: (): void => {
           LOG.info(`Opening data export`);
           this.createDataExportWindow();

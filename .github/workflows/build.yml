@@ -23,12 +23,12 @@ jobs:
           - os: macos-15-intel
             mac_arch: x64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
           token: ${{ secrets.GH_TOKEN }}
       - name: Setup Node
-        uses: actions/setup-node@master
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Install dependencies
@@ -36,8 +36,8 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          if [[ "${{ matrix.os }}" == macos-* ]]; then
-            if [[ "${{ matrix.mac_arch }}" == "arm64" ]]; then
+          if [ -n "${{ matrix.mac_arch }}" ]; then
+            if [ "${{ matrix.mac_arch }}" == "arm64" ]; then
               npm run build:mac:arm64
             else
               npm run build:mac:x64
@@ -46,7 +46,7 @@ jobs:
             npm run build
           fi
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=4096
           MAC_ARCH_TYPE: ${{ matrix.mac_arch == 'arm64' && 'AppleSilicon' || 'Intel' }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           APPLE_ID: ${{ secrets.APPLE_ID }}

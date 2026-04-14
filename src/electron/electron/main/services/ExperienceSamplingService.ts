@@ -1,6 +1,7 @@
 import { ExperienceSamplingResponseEntity } from '../entities/ExperienceSamplingResponseEntity';
 import getMainLogger from '../../config/Logger';
 import ExperienceSamplingDto from '../../../shared/dto/ExperienceSamplingDto';
+import type { ExperienceSamplingAnswerType } from '../../../shared/StudyConfiguration';
 
 const LOG = getMainLogger('ExperienceSamplingService');
 
@@ -10,10 +11,11 @@ export class ExperienceSamplingService {
     question1: string,
     responseOptions1: string,
     question2: string,
-    responseOptions2: string,
-    scale: number,
+    answerType: ExperienceSamplingAnswerType,
+    responseOptions2: string | null,
+    scale: number | null,
     response1?: number,
-    response2?: number,
+    response2??: string,
     skipped: boolean
   ): Promise<void> {
     LOG.debug(
@@ -25,6 +27,7 @@ export class ExperienceSamplingService {
       question2,
       responseOptions: responseOptions1,
       responseOptions1,
+      answerType,
       responseOptions2,
       scale,
       response: response1,
@@ -47,6 +50,7 @@ export class ExperienceSamplingService {
       question: response.question1 ?? response.question,
       question1: response.question1 ?? response.question,
       question2: response.question2 ?? response.question,
+      answerType: response.answerType,
       responseOptions: response.responseOptions1 ?? response.responseOptions,
       responseOptions1: response.responseOptions1 ?? response.responseOptions,
       responseOptions2: response.responseOptions2 ?? response.responseOptions,

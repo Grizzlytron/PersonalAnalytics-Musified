@@ -24,7 +24,10 @@ import DOMPurify from 'dompurify';
 import { WorkScheduleService } from 'electron/main/services/WorkScheduleService';
 import { WorkHoursDto } from 'shared/dto/WorkHoursDto';
 import { MuseRawEegEntity } from '../main/entities/MuseRawEegEntity';
+import { getActivitySessions, getAppUsageSessions, getLongestTimeActiveInsight, ActivitySessions, TimeActive } from '../main/services/RetrospectionService'
+import { SchedulingService } from '../main/services/SchedulingService'
 import path from 'path';
+import type { ExperienceSamplingAnswerType } from '../../shared/StudyConfiguration';
 import type { NBackTaskBlockDto } from '../../shared/dto/NBackTaskBlockDto';
 import { NBackTaskBlockEntity } from '../main/entities/NBackTaskBlockEntity';
 
@@ -47,6 +50,7 @@ export class IpcHandler {
   private readonly userInputService: UserInputTrackerService;
   private readonly dataExportService: DataExportService;
   private readonly workScheduleService: WorkScheduleService;
+  private schedulingService: SchedulingService;
   private typedIpcMain: TypedIpcMain<Events, Commands> = ipcMain as TypedIpcMain<Events, Commands>;
 
   constructor(
@@ -64,6 +68,10 @@ export class IpcHandler {
     this.workScheduleService = workScheduleService;
   }
 
+  public setSchedulingService(schedulingService: SchedulingService): void {
+    this.schedulingService = schedulingService;
+  }
+
   public async init(): Promise<void> {
     this.actions = {
       openLogs: this.openLogs,
@@ -73,6 +81,7 @@ export class IpcHandler {
       setSettingsProp: this.setSettingsProp,
       getSettings: this.getSettings,
       createExperienceSample: this.createExperienceSample,
+      resizeExperienceSamplingWindow: this.resizeExperienceSamplingWindow,
       closeExperienceSamplingWindow: this.closeExperienceSamplingWindow,
       openNBackWindow: this.openNBackWindow,
       closeNBackWindow: this.closeNBackWindow,
@@ -89,9 +98,15 @@ export class IpcHandler {
       revealItemInFolder: this.revealItemInFolder,
       openUploadUrl: this.openUploadUrl,
       showDataExportError: this.showDataExportError,
+      confirmDDLUpload: this.confirmDDLUpload,
       startAllTrackers: this.startAllTrackers,
       triggerPermissionCheckAccessibility: this.triggerPermissionCheckAccessibility,
       triggerPermissionCheckScreenRecording: this.triggerPermissionCheckScreenRecording,
+      retrospectionGetActivities: this.retrospectionGetActivities,
+      retrospectionLoadLongestTimeActive: this.retrospectionLoadLongestTimeActive,
+      retrospectionGetTopThreeMostActiveApps: this.retrospectionGetTopThreeMostActiveApps,
+      openRetrospection: this.openRetrospection,
+      closeRetrospectionWindow: this.closeRetrospectionWindow,
       'muse:get-tracker-status': this.getMuseTrackerStatus,
       'muse:start-tracker': this.startMuseTracker,
       'muse:stop-tracker': this.stopMuseTracker,
@@ -121,10 +136,11 @@ export class IpcHandler {
     question1: string,
     responseOptions1: string,
     question2: string,
-    responseOptions2: string,
-    scale: number,
+    answerType: ExperienceSamplingAnswerType,
+    responseOptions2: string | null,
+    scale: number | null,
     response1?: number,
-    response2?: number,
+    response2??: string,
     skipped: boolean = false
   ) {
     await this.experienceSamplingService.createExperienceSample(
@@ -132,6 +148,7 @@ export class IpcHandler {
       question1,
       responseOptions1,
       question2,
+      answerType,
       responseOptions2,
       scale,
       response1,
@@ -148,6 +165,10 @@ export class IpcHandler {
   private openCollected() {
     LOG.info(`Opening collected data at ${app.getPath('userData')}`);
     shell.showItemInFolder(path.join(app.getPath('userData'), 'database.sqlite'));
+  }
+
+  private resizeExperienceSamplingWindow(height: number): void {
+    this.windowService.resizeExperienceSamplingWindow(height);
   }
 
   private closeExperienceSamplingWindow(skippedExperienceSampling: boolean): void {
@@ -207,6 +228,10 @@ export class IpcHandler {
 
   private async setWorkHours(schedule: WorkHoursDto): Promise<void> {
     await this.workScheduleService.setWorkSchedule(schedule);
+
+    if (this.schedulingService) {
+      this.schedulingService.updateRetrospectionJobs(schedule);
+    }
   }
 
   private async setSettingsProp(prop: string, value: any): Promise<void> {
@@ -298,6 +323,19 @@ export class IpcHandler {
     this.windowService.openExternal();
   }
 
+  private async confirmDDLUpload(): Promise<boolean> {
+    const { response } = await dialog.showMessageBox({
+      type: 'question',
+      buttons: ['Yes', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Confirm Data Donation',
+      message: `Do you agree to donate and upload your data to the ${studyConfig.name} study?`,
+      detail: 'Your data will be uploaded via a secure, encrypted connection to a secure, encrypted store operated by the University of Zurich (Data Donation Lab). Your data will be processed in accordance with the study\'s consent form.'
+    });
+    return response === 0;
+  }
+
   private async showDataExportError(errorMessage?: string): Promise<void> {
     const message =
       `Please try again. If the export keeps failing, contact the study team (${studyConfig.contactName}, ${studyConfig.contactEmail}) and send them a screenshot of this error.` +
@@ -326,6 +364,36 @@ export class IpcHandler {
     } catch (e) {
       LOG.error('Error starting trackers', e);
     }
+  }
+
+  private async retrospectionGetActivities(date: Date): Promise<ActivitySessions[]> {
+    return await getActivitySessions(new Date(date));
+  }
+
+  private async retrospectionLoadLongestTimeActive(date: Date): Promise<TimeActive | undefined> {
+    try {
+      return await getLongestTimeActiveInsight(new Date(date));
+    } catch (error) {
+      LOG.error('Error loading longest time active', error);
+    }
+  }
+
+  private async retrospectionGetTopThreeMostActiveApps(date: Date): Promise<ActivitySessions[] | undefined> {
+    try {
+      return (await getAppUsageSessions(new Date(date)))
+        .sort((a, b) => b.totalDurationMs - a.totalDurationMs)
+        .slice(0, 3);
+    } catch (error) {
+      LOG.error('Error loading top apps', error);
+    }
+  }
+
+  private async openRetrospection(): Promise<void> {
+    await this.windowService.createRetrospectionWindow();
+  }
+
+  private closeRetrospectionWindow(): void {
+    this.windowService.closeRetrospectionWindow();
   }
 
   private async refreshMuseStatusMetrics(museService: MuseTrackerService): Promise<void> {

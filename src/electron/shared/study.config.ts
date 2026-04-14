@@ -14,8 +14,7 @@ const studyConfig: StudyConfiguration = {
   contactEmail: 'lucastimothyleo.baer@uzh.ch',
   subjectIdLength: 6,
   dataExportEnabled: true,
-  dataExportFormat: DataExportFormat.ExportAsZippedSqlite, // default should be ExportAsZippedSqlite,
-  dataExportDDLProjectName: 'PA_Test3',
+  dataExportFormat: DataExportFormat.ExportAsZippedSqlite,
   dataExportEncrypted: false,
   nBackInterface: {
     enabled: true,
@@ -63,6 +62,7 @@ const studyConfig: StudyConfiguration = {
   },
   displayDaysParticipated: true,
   showActiveTimesInOnboarding: true,
+  enableRetrospection: true,
   trackers: {
     windowActivityTracker: {
       enabled: true,
@@ -72,19 +72,38 @@ const studyConfig: StudyConfiguration = {
     },
     userInputTracker: {
       enabled: true,
-      intervalInMs: 60000
+      intervalInMs: 60000,
+      collectKeyDetails: true
     },
     experienceSamplingTracker: {
       enabled: true,
       enabledWorkHours: false,
       scale: 7,
       questions: [
-        'Compared to your normal level of focus, how focused did you feel in the last session?',
-        'Compared to your normal level of mental effort, how much effort did you put in the last session?'
-      ],
-      responseOptions: [
-        ['not focused', 'moderately focused', 'very focused'],
-        ['not much effort', 'moderately much effort', 'very much effort']
+        {
+          question:
+            'Compared to your normal level of focus, how focused did you feel in the last session?',
+          answerType: 'LikertScale',
+          scale: 7,
+          responseOptions: ['not at all focused', 'moderately focused', 'very focused']
+        },
+        {
+          question: 'Compared to your normal level of mental effort, how much effort did you put in the last session?',
+          answerType: 'LikertScale',
+          scale: 7,
+          responseOptions: ['not much effort', 'moderately much effort', 'very much effort']
+        },
+        // {
+        //   question: 'Compared to your normal level of mental effort, how much effort did you put in the last session?'
+        //   answerType: 'TextResponse',
+        //   responseOptions: 'singleLine',
+        //   maxLength: 100
+        // },
+        // {
+        //   question: 'Which distractions did you experience in the last session?',
+        //   answerType: 'MultiChoice',
+        //   responseOptions: ['Notifications', 'Meetings', 'Context switching', 'Personal interruptions', 'None']
+        // }
       ],
       intervalInMs: 1000 * 60 * 15, // default interval (must be listed in userDefinedInterval_h if set)
       samplingRandomization: 0.2, // 20% randomization, so the interval will be between 12 and 18 minutes

@@ -3,18 +3,30 @@ import { onMounted, ref, computed } from 'vue';
 import Switch from '../../components/Switch.vue';
 import studyConfig from '../../../shared/study.config';
 import typedIpcRenderer from '../../utils/typedIpcRenderer';
+import type { ExperienceSamplingQuestion } from '../../../shared/StudyConfiguration'
 
 const es = studyConfig.trackers.experienceSamplingTracker;
 const allowUserToDisable = es.allowUserToDisable ?? true;
 const allowUserToChangeInterval = es.allowUserToChangeInterval ?? true;
+const enableRetrospection = studyConfig.enableRetrospection ?? true
 
 const disabled = ref(false);
+const retrospectionDisabled = ref(false)
 const selectedInterval = ref<number | null>(null);
 
 const intervalOptions = computed<number[]>(() =>
   (es.userDefinedInterval_h ?? []).filter((n: number) => Number.isFinite(n))
 );
-const questions = es.questions;
+const questions: ExperienceSamplingQuestion[] = es.questions;
+
+function questionTypeLabel(question: ExperienceSamplingQuestion): string {
+  switch (question.answerType) {
+    case 'LikertScale': return 'Likert Scale'
+    case 'TextResponse': return 'Text Response'
+    case 'SingleChoice': return 'Single Choice'
+    case 'MultiChoice': return 'Multi Choice'
+  }
+}
 
 const defaultIntervalHours = es.intervalInMs / (1000 * 60 * 60);
 
@@ -38,6 +50,7 @@ const selectedDropdownValue = computed<number | ''>(() => {
 async function load() {
   const settings: any = await typedIpcRenderer.invoke('getSettings');
   disabled.value = (settings.userDisabledExperienceSampling ?? 0) === 1;
+  retrospectionDisabled.value = (settings.userDisabledRetrospection ?? 0) === 1
   selectedInterval.value = settings.userDefinedExperienceSamplingInterval_h ?? null;
 }
 
@@ -48,8 +61,18 @@ const onChangeSelfReportingEnabled = async (e: Event) => {
     'setSettingsProp',
     'userDisabledExperienceSampling',
     disabled.value ? 1 : 0
-  );
-};
+  )
+}
+
+const onChangeRetrospectionEnabled = async (e: Event) => {
+  const isChecked = (e.target as HTMLInputElement).checked
+  retrospectionDisabled.value = !isChecked
+  await typedIpcRenderer.invoke(
+    'setSettingsProp',
+    'userDisabledRetrospection',
+    retrospectionDisabled.value ? 1 : 0
+  )
+}
 
 const onSelectInterval = async (val: string) => {
   const v = val === '' ? null : Number(val);
@@ -61,15 +84,15 @@ onMounted(load);
 </script>
 
 <template>
-  <div>
-    <article class="prose prose-lg mb-5 mt-4">
+  <div class="dark:text-gray-300">
+    <article class="prose prose-lg mt-4 mb-5 dark:prose-invert">
       <h1 class="mt-0">
         <span class="primary-blue">Self-Reflection</span>
       </h1>
       <p class="text-base">PersonalAnalytics allows you to periodically reflect.</p>
     </article>
 
-    <article class="prose mt-4">
+    <article class="prose mt-4 dark:prose-invert">
       <div v-if="allowUserToDisable" class="mb-6">
         <Switch
           :modelValue="!disabled"
@@ -84,12 +107,12 @@ onMounted(load);
       >
         <div class="form-control w-[70%] max-w-xl">
           <label class="label pb-0">
-            <span class="label-text text-base">
+            <span class="label-text text-base dark:text-gray-300">
               How frequently would you like to reflect (during active times)?
             </span>
           </label>
           <select
-            class="select select-bordered mt-2"
+            class="select select-bordered mt-2 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600"
             :value="selectedDropdownValue"
             @change="onSelectInterval(($event.target as HTMLSelectElement).value)"
           >
@@ -101,12 +124,34 @@ onMounted(load);
       </div>
     </article>
 
-    <article class="prose prose-lg mt-4">
+    <article class="prose prose-lg mt-4 dark:prose-invert">
       <div class="self-reporting-container">
-        <div class="mb-2 font-medium">Self-Reflection Questions:</div>
-        <ul class="ml-6 list-disc">
-          <li v-for="q in questions" :key="q">{{ q }}</li>
+        <div class="font-medium mb-2">Self-Reflection Questions:</div>
+        <ul class="list-disc ml-6">
+          <li v-for="q in questions" :key="q.question">
+            {{ q.question }} ({{ questionTypeLabel(q) }})
+          </li>
         </ul>
+      </div>
+    </article>
+
+    <!-- Retrospection Settings -->
+    <article v-if="enableRetrospection" class="prose prose-lg mt-8 mb-5">
+      <h1 class="mt-0">
+        <span class="primary-blue">Retrospection</span>
+      </h1>
+      <p class="text-base">
+        The retrospection provides a daily summary of your computer activity at the end of the workday.
+      </p>
+    </article>
+
+    <article v-if="enableRetrospection" class="prose mt-4">
+      <div class="mb-6">
+        <Switch
+          :modelValue="!retrospectionDisabled"
+          :label="'Automatically open retrospection at the end of the workday'"
+          :on-change="onChangeRetrospectionEnabled"
+        />
       </div>
     </article>
   </div>
@@ -124,5 +169,11 @@ onMounted(load);
   border-top: 1px solid rgb(59 130 246 / 0.5);
   margin-top: 24px;
   padding-top: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .self-reporting-container {
+    border-top-color: rgb(59 130 246 / 0.3);
+  }
 }
 </style>

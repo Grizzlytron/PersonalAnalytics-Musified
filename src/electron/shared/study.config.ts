@@ -87,7 +87,7 @@ const studyConfig: StudyConfiguration = {
           responseOptions: ['not at all focused', 'moderately focused', 'very focused']
         },
         {
-          question: 'Compared to your normal level of mental effort, how mentally demanding did you find the last interval?',
+          question: 'Compared to your normal level of mental effort, how mentally demanding did this last interval feel?',
           answerType: 'LikertScale',
           scale: 7,
           responseOptions: ['not at all demanding', 'moderately demanding', 'very demanding']

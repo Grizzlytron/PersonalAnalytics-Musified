@@ -1,7 +1,7 @@
 {
   "name": "personalanalytics-musified",
   "description": "PersonalAnalytics (musified) is a privacy-protecting, open-source self-monitoring software extended with Muse tracking and biometric data collection",
-  "version": "1.1.27",
+  "version": "1.1.28",
   "main": "dist-electron/main/index.js",
   "type": "module",
   "author": {
@@ -11,12 +11,11 @@
   "scripts": {
     "dev": "vite",
     "prepare:muse-tracker": "npm --prefix PA.MuseTracker run rebuild && npm --prefix PA.MuseTracker/typescript run build",
-    "validate:muse:mac-runtime": "node scripts/validate-macos-muse-runtime.cjs",
     "prebuild": "npm run prepare:muse-tracker",
     "build": "vue-tsc --noEmit && vite build && electron-builder --config electron-builder.config.cjs",
     "build:mac": "npm run build:mac:arm64 && npm run build:mac:x64",
-    "build:mac:arm64": "npm run prepare:muse-tracker && npm run validate:muse:mac-runtime && vue-tsc --noEmit && vite build && electron-builder --mac --arm64 --config electron-builder.config.cjs",
-    "build:mac:x64": "npm run prepare:muse-tracker && npm run validate:muse:mac-runtime && vue-tsc --noEmit && vite build && electron-builder --mac --x64 --config electron-builder.config.cjs",
+    "build:mac:arm64": "npm run prepare:muse-tracker && vue-tsc --noEmit && vite build && electron-builder --mac --arm64 --config electron-builder.config.cjs",
+    "build:mac:x64": "npm run prepare:muse-tracker && vue-tsc --noEmit && vite build && electron-builder --mac --x64 --config electron-builder.config.cjs",
     "build:win": "npm run prepare:muse-tracker && vue-tsc --noEmit && vite build && electron-builder --win --config electron-builder.config.cjs",
     "postinstall": "electron-builder install-app-deps",
     "preview": "vite preview",

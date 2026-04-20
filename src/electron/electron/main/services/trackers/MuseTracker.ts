@@ -295,15 +295,6 @@ export class MuseTracker implements Tracker {
     this.museCore.on('error', (error: Error) => {
       LOG.error('Muse device error', error);
     });
-
-    this.museCore.on('discoveryDebug', (payload: any) => {
-      const source = payload?.source ?? 'unknown';
-      const listening = payload?.listening ?? false;
-      const muses = payload?.muses ?? 0;
-      const cached = payload?.cached ?? 0;
-      const preview = payload?.preview ? ` preview=[${payload.preview}]` : '';
-      LOG.info(`[muse-discovery][${source}] listening=${listening} muses=${muses} cached=${cached}${preview}`);
-    });
   }
 
   private getConnectionStateName(state: number): string {
@@ -748,23 +739,7 @@ export class MuseTracker implements Tracker {
    * Run diagnostic checks on native module and device discovery
    */
   public runDiagnostics(): void {
-    LOG.info('========== MuseTracker Diagnostics ==========');
-    LOG.info('Native module available:', this.nativeAvailable);
-    LOG.info('Tracker running:', this.isRunning);
-    LOG.info('Device connected:', this.isConnected);
-    LOG.info('Current device:', this.currentDeviceName || 'None');
-
-    if (this.nativeAvailable && this.museCore) {
-      try {
-        LOG.info('\n--- Running MuseTrackerCore diagnostics ---');
-        this.museCore.diagnose();
-        LOG.info('✓ Core diagnostics completed');
-      } catch (err) {
-        LOG.error('✗ Core diagnostics failed:', err);
-      }
-    }
-
-    LOG.info('===========================================\n');
+    LOG.info(`MuseTracker: native=${this.nativeAvailable} running=${this.isRunning} connected=${this.isConnected} device=${this.currentDeviceName || 'None'}`);
   }
 
   /** Persist buffered raw EEG packets in batch to SQLite. */
@@ -963,43 +938,5 @@ export class MuseTracker implements Tracker {
   private clearAllBuffers(): void {
     this.eegBuffer = [];
     this.opticsBuffer = [];
-  }
-
-  /**
-   * Diagnostic method to check native module status
-   */
-  public async diagnoseConnection(): Promise<void> {
-    LOG.info('=== Muse Connection Diagnostics ===');
-    LOG.info(`Native module available: ${this.nativeAvailable}`);
-    LOG.info(`Tracker running: ${this.isRunning}`);
-    LOG.info(`Connected: ${this.isConnected}`);
-
-    if (!this.nativeAvailable || !this.museCore) {
-      LOG.error('❌ Native module is NOT available!');
-      LOG.info('  - Check if muse-tracker package is installed');
-      LOG.info('  - Check if native addon was built correctly');
-      return;
-    }
-
-    try {
-      const devices = this.getDiscoveredDevices();
-      LOG.info(`Discovered devices: ${devices.length}`);
-      devices.forEach((d, i) => {
-        LOG.info(`  ${i + 1}. ${d.name} (${d.macAddress})`);
-        LOG.info(`     - RSSI: ${d.rssi}`);
-      });
-
-      if (devices.length === 0) {
-        LOG.warn('❌ No devices found');
-        LOG.info('  - Is startListening() being called?');
-        LOG.info('  - Is the Muse device in pairing mode?');
-        LOG.info('  - Is the Muse device powered on?');
-        LOG.info('  - Is Bluetooth enabled on this computer?');
-      }
-    } catch (err) {
-      LOG.error('Error during diagnostic:', err);
-    }
-
-    LOG.info('=== End Diagnostics ===');
   }
 }

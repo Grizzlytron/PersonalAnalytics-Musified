@@ -2,7 +2,7 @@ import { StudyConfiguration } from './StudyConfiguration';
 import { DataExportFormat } from './DataExportFormat.enum';
 
 const studyConfig: StudyConfiguration = {
-  name: 'Measuring cognitive load and focus in Software Developers',
+  name: 'Measuring cognitive load and focus with a biometric headband',
   shortDescription:
     "This study aims to measure cognitive load and focus on tasks using a Muse S Athena (2025) tracker integrated into PersonalAnalytics. This study uses the self-monitoring software developed by the Human Aspects of Software Engineering Lab of the University of Zurich to non-intrusively collect computer interaction data and store it locally on your computer. Every now and then, a self-reflection question asks you about time well spent and perceived productivity. This software is open source, can be adapted and re-used for your own scientific studies.",
   infoUrl: 'https://github.com/Grizzlytron/PersonalAnalytics-Musified',
@@ -43,7 +43,7 @@ const studyConfig: StudyConfiguration = {
     ],
     reflectionQuestions: [
       {
-        id: 'demanding',
+        id: 'mentalDemand',
         text: 'How mentally demanding was this block for you?',
         minLabel: 'Not demanding',
         midLabel: 'Moderate',
@@ -51,7 +51,7 @@ const studyConfig: StudyConfiguration = {
       },
       {
         id: 'focused',
-        text: 'During the last block, how focused were you on the task?',
+        text: 'During the last block, how focused on the task were you?',
         minLabel: 'Not focused',
         midLabel: 'Moderately focused',
         maxLabel: 'Very focused'

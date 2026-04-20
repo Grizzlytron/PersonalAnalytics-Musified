@@ -3,7 +3,6 @@ import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
 import nBackConfig from '../../shared/nBack.config';
 import studyConfig from '../../shared/study.config';
 import type {
-  NBackReflectionQuestionConfiguration,
   NBackTaskDefinition
 } from '../../shared/StudyConfiguration';
 import type { NBackTaskBlockDto } from '../../shared/dto/NBackTaskBlockDto';
@@ -58,40 +57,41 @@ type LaserBeamEffect = {
   intensity: number;
 };
 
-const fallbackReflectionQuestions: NBackReflectionQuestionConfiguration[] = [
-  {
-    id: 'demanding',
-    text: 'How mentally demanding was this block for you?',
-    minLabel: 'Not demanding',
-    midLabel: 'Moderate',
-    maxLabel: 'Very demanding'
-  },
-  {
-    id: 'focused',
-    text: 'During the last block, how focused were you on the task?',
-    minLabel: 'Not focused',
-    midLabel: 'Moderately focused',
-    maxLabel: 'Very focused'
-  }
-];
-
 const meteoriteCount = 11;
 const laserBeamCount = 7;
 
-const fallbackTaskSequence: NBackTaskDefinition[] = [
-  { n: 0 },
-  { n: 1 },
-  { n: 2 },
-  {
-    n: 2,
-    withDistractions: true
-  },
-  { n: 3 }
-];
+const rawInterfaceConfig = studyConfig.nBackInterface;
 
-const interfaceConfig = studyConfig.nBackInterface;
-const baseTaskSequence = interfaceConfig?.tasks?.length ? interfaceConfig.tasks : fallbackTaskSequence;
-const shouldRandomizeTasksAfterFirstLevel = interfaceConfig?.randomizeTasksAfterFirstLevel ?? true;
+if (!rawInterfaceConfig) {
+  throw new Error('studyConfig.nBackInterface is required for NBackView.');
+}
+
+if (!rawInterfaceConfig.tasks?.length) {
+  throw new Error('studyConfig.nBackInterface.tasks must contain at least one task.');
+}
+
+if (!rawInterfaceConfig.reflectionQuestions || rawInterfaceConfig.reflectionQuestions.length < 2) {
+  throw new Error('studyConfig.nBackInterface.reflectionQuestions must contain at least two questions.');
+}
+
+if (typeof rawInterfaceConfig.distractionDotCount !== 'number') {
+  throw new Error('studyConfig.nBackInterface.distractionDotCount is required.');
+}
+
+if (typeof rawInterfaceConfig.scale !== 'number') {
+  throw new Error('studyConfig.nBackInterface.scale is required.');
+}
+
+if (typeof rawInterfaceConfig.randomizeTasksAfterFirstLevel !== 'boolean') {
+  throw new Error('studyConfig.nBackInterface.randomizeTasksAfterFirstLevel is required.');
+}
+
+const interfaceConfig = rawInterfaceConfig;
+const baseTaskSequence: NBackTaskDefinition[] = interfaceConfig.tasks;
+const shouldRandomizeTasksAfterFirstLevel = interfaceConfig.randomizeTasksAfterFirstLevel;
+const reflectionQuestions = interfaceConfig.reflectionQuestions.slice(0, 2);
+const reflectionScale: number = interfaceConfig.scale as number;
+const distractionDotCount: number = interfaceConfig.distractionDotCount as number;
 
 function cloneTaskDefinition(taskDef: NBackTaskDefinition): NBackTaskDefinition {
   return { ...taskDef };
@@ -117,11 +117,6 @@ function buildTaskSequence(): NBackTaskDefinition[] {
 }
 
 const taskSequence = ref<NBackTaskDefinition[]>(buildTaskSequence());
-const configuredReflectionQuestions = interfaceConfig?.reflectionQuestions ?? [];
-const reflectionQuestions = configuredReflectionQuestions.length >= 2
-  ? configuredReflectionQuestions.slice(0, 2)
-  : fallbackReflectionQuestions;
-const reflectionScale = interfaceConfig?.scale ?? 7;
 
 const centerSquare = 4;
 const squareOrder: NBackGridCellIndex[] = [0, 1, 2, 3, 4, 5, 6, 7, 8];
@@ -193,7 +188,7 @@ function createLaserBeams(count: number): LaserBeamEffect[] {
 }
 
 const distractionDots = ref(
-  createDistractionDots(interfaceConfig?.distractionDotCount ?? nBackConfig.distractionDotCount)
+  createDistractionDots(distractionDotCount)
 );
 const meteorites = ref(createMeteorites(meteoriteCount));
 const laserBeams = ref(createLaserBeams(laserBeamCount));
@@ -724,7 +719,7 @@ function prepareCurrentTask() {
 
   if (taskDef.withDistractions === true) {
     distractionDots.value = createDistractionDots(
-      interfaceConfig?.distractionDotCount ?? nBackConfig.distractionDotCount
+      distractionDotCount
     );
     meteorites.value = createMeteorites(meteoriteCount);
     laserBeams.value = createLaserBeams(laserBeamCount);
@@ -906,13 +901,8 @@ onUnmounted(() => {
     </div>
 
     <div v-if="workflowState === 'setup'" class="setup-container">
-      <h1 class="setup-title">{{ interfaceConfig?.title ?? 'Space Crusaders' }}</h1>
-      <p class="setup-overview">
-        {{
-          interfaceConfig?.description ??
-          "You are piloting an intergalactic Space ship while galactic monsters chase you across the galaxy. Your mission is to outrun them across 5 levels by making precise gate decisions under pressure. Each level contains 48 trials and lasts about 2 minute Press J only when the level rule says the gate is open; if it is not open, do not press anything. Level rules are: Level 1 (0-back) press J only for the top-left gate, Level 2 (1-back), Level 3 (2-back), Level 4 (2-back with distractions), and Level 5 (3-back). Watch your Speed Bar under Level Progress: correct gate presses increase your speed, while incorrect presses slow you down and increase the chance of being caught and eaten by the monsters. After every level, Mission Control asks two short self-reflection questions."
-        }}
-      </p>
+      <h1 class="setup-title">{{ interfaceConfig.title }}</h1>
+      <p class="setup-overview">{{ interfaceConfig.description }}</p>
 
       <button class="btn btn-primary" type="button" @click="startWorkflow">
         Start the adventure

@@ -110,7 +110,7 @@
             <div class="flex flex-1 flex-col justify-between gap-3">
               <div>
                 <p class="mb-2 text-xs text-base-content/60">Available Devices:</p>
-                <div v-if="availableDevices.length > 0" class="max-h-36 space-y-2 overflow-y-auto pr-1">
+                <div v-if="availableDevices.length > 0 && isTrackerRunning" class="max-h-36 space-y-2 overflow-y-auto pr-1">
                   <div
                     v-for="device in availableDevices"
                     :key="device.macAddress"

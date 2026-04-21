@@ -23,7 +23,8 @@ const activeQuestion = computed<ExperienceSamplingQuestion>(
   () => selectedQuestions[currentQuestionIndex.value] ?? selectedQuestions[0]
 );
 const questionProgressLabel = computed(
-  () => `${Math.min(currentQuestionIndex.value + 1, selectedQuestions.length)} / ${selectedQuestions.length}`
+  () =>
+    `${Math.min(currentQuestionIndex.value + 1, selectedQuestions.length)} / ${selectedQuestions.length}`
 );
 
 const scale = computed(() =>
@@ -32,7 +33,8 @@ const scale = computed(() =>
     : []
 );
 const choiceOptions = computed(() =>
-  activeQuestion.value.answerType === 'SingleChoice' || activeQuestion.value.answerType === 'MultiChoice'
+  activeQuestion.value.answerType === 'SingleChoice' ||
+  activeQuestion.value.answerType === 'MultiChoice'
     ? activeQuestion.value.responseOptions
     : []
 );
@@ -60,7 +62,9 @@ const singleChoiceResponse = ref<string | null>(null);
 const multiChoiceResponse = ref<string[]>([]);
 
 const needsSubmitButton = computed(
-  () => activeQuestion.value.answerType === 'TextResponse' || activeQuestion.value.answerType === 'MultiChoice'
+  () =>
+    activeQuestion.value.answerType === 'TextResponse' ||
+    activeQuestion.value.answerType === 'MultiChoice'
 );
 
 const rootEl = ref<HTMLElement | null>(null);
@@ -84,7 +88,9 @@ watch(currentQuestionIndex, () => {
 });
 
 const textMode = computed(() => {
-  return activeQuestion.value.answerType === 'TextResponse' ? activeQuestion.value.responseOptions : 'singleLine';
+  return activeQuestion.value.answerType === 'TextResponse'
+    ? activeQuestion.value.responseOptions
+    : 'singleLine';
 });
 
 const textMaxLength = computed(() => {
@@ -137,7 +143,9 @@ function buildResponseValue(answer?: number): string | undefined {
     return singleChoiceResponse.value ?? undefined;
   }
   if (activeQuestion.value.answerType === 'MultiChoice') {
-    return multiChoiceResponse.value.length > 0 ? JSON.stringify(multiChoiceResponse.value) : undefined;
+    return multiChoiceResponse.value.length > 0
+      ? JSON.stringify(multiChoiceResponse.value)
+      : undefined;
   }
   return undefined;
 }
@@ -273,17 +281,27 @@ async function skipExperienceSample() {
         <div class="flex flex-1 flex-col">
           <div class="flex items-baseline justify-between">
             <p class="prompt">{{ activeQuestion.question }}</p>
-            <span v-if="selectedQuestions.length > 1" class="text-xs text-gray-400 ml-2 whitespace-nowrap">{{ questionProgressLabel }}</span>
+            <span
+              v-if="selectedQuestions.length > 1"
+              class="ml-2 whitespace-nowrap text-xs text-gray-400"
+              >{{ questionProgressLabel }}</span
+            >
           </div>
 
-          <div v-if="activeQuestion.answerType === 'LikertScale'" class="-mx-1 mt-2 flex flex-row justify-between">
+          <div
+            v-if="activeQuestion.answerType === 'LikertScale'"
+            class="-mx-1 mt-2 flex flex-row justify-between"
+          >
             <div
               v-for="value in scale"
               :key="value"
               class="sample-answer"
               @click="!isSubmitting && createExperienceSample(value)"
             >
-              <span v-if="!(isSubmitting && submitMode === 'answer')" class="mx-auto flex font-medium">
+              <span
+                v-if="!(isSubmitting && submitMode === 'answer')"
+                class="mx-auto flex font-medium"
+              >
                 {{ value }}
               </span>
               <span v-else class="mx-auto flex font-medium">
@@ -292,13 +310,21 @@ async function skipExperienceSample() {
             </div>
           </div>
 
-          <div v-if="activeQuestion.answerType === 'LikertScale'" class="mt-1 flex flex-row text-sm text-gray-400 dark:text-gray-500">
+          <div
+            v-if="activeQuestion.answerType === 'LikertScale'"
+            class="mt-1 flex flex-row text-sm text-gray-400 dark:text-gray-500"
+          >
             <div class="basis-1/3">{{ (activeQuestion as any).responseOptions[0] }}</div>
             <div class="basis-1/3 text-center">
-              <span v-if="(activeQuestion as any).responseOptions.length === 3">{{ (activeQuestion as any).responseOptions[1] }}</span>
+              <span v-if="(activeQuestion as any).responseOptions.length === 3">{{
+                (activeQuestion as any).responseOptions[1]
+              }}</span>
             </div>
             <div class="basis-1/3 text-right">
-              {{ (activeQuestion as any).responseOptions[2] || (activeQuestion as any).responseOptions[1] }}
+              {{
+                (activeQuestion as any).responseOptions[2] ||
+                (activeQuestion as any).responseOptions[1]
+              }}
             </div>
           </div>
 
@@ -325,7 +351,10 @@ async function skipExperienceSample() {
           </div>
 
           <div
-            v-if="activeQuestion.answerType === 'SingleChoice' || activeQuestion.answerType === 'MultiChoice'"
+            v-if="
+              activeQuestion.answerType === 'SingleChoice' ||
+              activeQuestion.answerType === 'MultiChoice'
+            "
             class="mt-1 flex flex-col"
           >
             <div class="choice-hint">
@@ -338,9 +367,10 @@ async function skipExperienceSample() {
                   :key="option"
                   class="choice-option"
                   :class="{
-                    'choice-option-selected': activeQuestion.answerType === 'SingleChoice'
-                      ? singleChoiceResponse === option
-                      : multiChoiceResponse.includes(option)
+                    'choice-option-selected':
+                      activeQuestion.answerType === 'SingleChoice'
+                        ? singleChoiceResponse === option
+                        : multiChoiceResponse.includes(option)
                   }"
                   :disabled="isSubmitting"
                   @click="
@@ -389,7 +419,7 @@ async function skipExperienceSample() {
           </div>
         </div>
       </div>
-      <div class="flex cursor-pointer border-l border-gray-200 dark:border-gray-600 self-stretch">
+      <div class="flex cursor-pointer self-stretch border-l border-gray-200 dark:border-gray-600">
         <div class="flex w-full flex-col items-center justify-center">
           <button
             v-if="needsSubmitButton"
@@ -400,10 +430,7 @@ async function skipExperienceSample() {
             <span v-if="!(isSubmitting && submitMode === 'answer')">Submit</span>
             <span v-else class="loading loading-spinner loading-xs" />
           </button>
-          <div
-            class="skip-button"
-            @click="!isSubmitting && skipExperienceSample()"
-          >
+          <div class="skip-button" @click="!isSubmitting && skipExperienceSample()">
             <span v-if="!(isSubmitting && submitMode === 'skip')">Skip</span>
             <span v-else class="loading loading-spinner loading-xs" />
           </div>
@@ -513,7 +540,10 @@ async function skipExperienceSample() {
     text-align: left;
     padding: 0.3rem 0.625rem;
     font-size: 0.8rem;
-    transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+    transition:
+      background-color 120ms ease,
+      color 120ms ease,
+      border-color 120ms ease;
   }
 
   .choice-option:hover {
@@ -611,7 +641,9 @@ async function skipExperienceSample() {
     font-weight: 500;
     color: #6b7280;
     cursor: pointer;
-    transition: background-color 120ms ease, color 120ms ease;
+    transition:
+      background-color 120ms ease,
+      color 120ms ease;
   }
 
   .skip-button:hover {

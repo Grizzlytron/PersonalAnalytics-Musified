@@ -17,8 +17,10 @@ type InputMap = {
   [key: string]: (...args: any) => any;
 };
 
-export interface TypedIpcMain<IpcEvents extends InputMap, IpcCommands extends InputMap>
-  extends IpcMain {
+export interface TypedIpcMain<
+  IpcEvents extends InputMap,
+  IpcCommands extends InputMap
+> extends IpcMain {
   on<K extends keyof IpcEvents>(
     channel: K,
     listener: (event: IpcMainEvent, ...args: Parameters<IpcEvents[K]>) => void
@@ -49,8 +51,10 @@ export interface TypedIpcMain<IpcEvents extends InputMap, IpcCommands extends In
   removeHandler<K extends keyof IpcCommands>(channel: K): void;
 }
 
-export interface TypedIpcRenderer<IpcEvents extends InputMap, IpcCommands extends InputMap>
-  extends IpcRenderer {
+export interface TypedIpcRenderer<
+  IpcEvents extends InputMap,
+  IpcCommands extends InputMap
+> extends IpcRenderer {
   on<K extends keyof IpcEvents>(
     channel: K,
     listener: (event: IpcRendererEvent, ...args: Parameters<IpcEvents[K]>) => void

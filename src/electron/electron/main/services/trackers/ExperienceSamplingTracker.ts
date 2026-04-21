@@ -6,7 +6,6 @@ import { Settings } from '../../entities/Settings';
 import { powerMonitor } from 'electron';
 import { WorkScheduleService } from '../WorkScheduleService';
 import studyConfig from '../../../../shared/study.config';
-import { DataSource } from 'typeorm';
 
 const LOG = getMainLogger('ExperienceSamplingTracker');
 

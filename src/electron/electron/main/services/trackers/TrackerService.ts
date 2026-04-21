@@ -8,10 +8,9 @@ import { WindowService } from '../WindowService';
 import studyConfig from '../../../../shared/study.config';
 import { UserInputEntity } from '../../entities/UserInputEntity';
 import { MoreThanOrEqual } from 'typeorm';
-import { WorkScheduleService } from '../WorkScheduleService';;
-import { DaysParticipatedTracker } from './DaysParticipatedTracker';;
+import { WorkScheduleService } from '../WorkScheduleService';
+import { DaysParticipatedTracker } from './DaysParticipatedTracker';
 import { MuseTracker } from './MuseTracker';
-import { MuseTrackerService } from './MuseTrackerService';
 
 const LOG = getMainLogger('TrackerService');
 
@@ -24,13 +23,11 @@ export class TrackerService {
   private manuallyStartedTrackerNames: Set<string> = new Set();
 
   constructor(
-    
     TrackerConfiguration: TrackerConfiguration,
-   
+
     windowService: WindowService,
-   
+
     workScheduleService: WorkScheduleService
-  
   ) {
     this.config = TrackerConfiguration;
     this.windowService = windowService;

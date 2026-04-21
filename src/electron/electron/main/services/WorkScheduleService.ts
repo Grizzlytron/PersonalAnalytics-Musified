@@ -26,7 +26,7 @@ export class WorkScheduleService {
     // clear existing work schedule
     await WorkDayEntity.clear();
 
-    for (let day of weekDays) {
+    for (const day of weekDays) {
       await WorkDayEntity.create({
         day,
         startTime: schedule[day].startTime,
@@ -61,7 +61,7 @@ export class WorkScheduleService {
   }
 
   public async getWorkSchedule(): Promise<WorkHoursDto> {
-    let workdays = await WorkDayEntity.find();
+    const workdays = await WorkDayEntity.find();
 
     if (workdays.length === 0) {
       LOG.info('No work schedule found. Returning default work schedule.');
@@ -74,9 +74,9 @@ export class WorkScheduleService {
       return defaultWorkSchedule;
     }
 
-    let schedule: WorkHoursDto = {} as WorkHoursDto;
+    const schedule: WorkHoursDto = {} as WorkHoursDto;
 
-    for (let day of weekDays) {
+    for (const day of weekDays) {
       const workday = workdays.find((d) => d.day === day);
       if (workday) {
         schedule[day] = {

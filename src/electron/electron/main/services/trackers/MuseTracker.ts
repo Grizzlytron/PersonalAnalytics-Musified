@@ -116,7 +116,9 @@ export class MuseTracker implements Tracker {
 
   constructor(collectingInterval: number = 1000) {
     this.collectingInterval = collectingInterval;
-    LOG.info(`${this.name} created with PRESET-1035 active, saving interval=${collectingInterval}ms`);
+    LOG.info(
+      `${this.name} created with PRESET-1035 active, saving interval=${collectingInterval}ms`
+    );
   }
 
   /** Load native module lazily — only when actually starting the tracker */
@@ -173,15 +175,17 @@ export class MuseTracker implements Tracker {
             this.museCore.setPreset(this.MUSE_2025_PRESET);
             this.presetConfigured = true;
             this.expectingPresetReconnect = true;
-            
+
             // Clear any existing preset reconnect timer
             this.clearPresetReconnectTimer();
-            
+
             // Set a 30-second timeout for device to reconnect with new preset
             this.presetReconnectTimer = setTimeout(() => {
               this.presetReconnectTimer = null;
               if (this.expectingPresetReconnect && !this.isConnected) {
-                LOG.error('Preset reconnect timeout: Device did not reconnect within 30s after preset change');
+                LOG.error(
+                  'Preset reconnect timeout: Device did not reconnect within 30s after preset change'
+                );
                 this.expectingPresetReconnect = false;
                 this.presetConfigured = false;
                 // Attempt to reconnect manually
@@ -190,7 +194,7 @@ export class MuseTracker implements Tracker {
                 }
               }
             }, 30000);
-            
+
             LOG.info('Preset set - device will disconnect and reconnect with PRESET_1035');
           } catch (err) {
             LOG.error('Failed to set preset', err);
@@ -222,7 +226,9 @@ export class MuseTracker implements Tracker {
         LOG.info(`Disconnected from ${packet.museName}`);
 
         if (this.expectingPresetReconnect) {
-          LOG.info('Disconnect expected while applying PRESET_1035, waiting for automatic reconnect');
+          LOG.info(
+            'Disconnect expected while applying PRESET_1035, waiting for automatic reconnect'
+          );
           return;
         }
 
@@ -236,7 +242,11 @@ export class MuseTracker implements Tracker {
         }
 
         if (wasConnected) {
-          this.markConnectionDropped('unexpected_disconnect', disconnectedDeviceId, disconnectedDeviceName);
+          this.markConnectionDropped(
+            'unexpected_disconnect',
+            disconnectedDeviceId,
+            disconnectedDeviceName
+          );
         }
         this.scheduleReconnect('unexpected_disconnect');
       } else if (packet.currentState === ConnectionState.CONNECTING) {
@@ -739,7 +749,9 @@ export class MuseTracker implements Tracker {
    * Run diagnostic checks on native module and device discovery
    */
   public runDiagnostics(): void {
-    LOG.info(`MuseTracker: native=${this.nativeAvailable} running=${this.isRunning} connected=${this.isConnected} device=${this.currentDeviceName || 'None'}`);
+    LOG.info(
+      `MuseTracker: native=${this.nativeAvailable} running=${this.isRunning} connected=${this.isConnected} device=${this.currentDeviceName || 'None'}`
+    );
   }
 
   /** Persist buffered raw EEG packets in batch to SQLite. */
@@ -836,10 +848,10 @@ export class MuseTracker implements Tracker {
     return hasAnyValue ? metadata : null;
   }
 
-  private computeSignalQualityFromHsi(
-    values: Array<number | undefined>
-  ): number | undefined {
-    const valid = values.filter((value) => typeof value === 'number' && Number.isFinite(value)) as number[];
+  private computeSignalQualityFromHsi(values: Array<number | undefined>): number | undefined {
+    const valid = values.filter(
+      (value) => typeof value === 'number' && Number.isFinite(value)
+    ) as number[];
     return valid.length > 0 ? valid.reduce((worst, value) => Math.max(worst, value), 0) : undefined;
   }
 
@@ -877,7 +889,9 @@ export class MuseTracker implements Tracker {
       const af8 = channels.af8;
       const tp10 = channels.tp10;
 
-      if (![tp9, af7, af8, tp10].every((value) => typeof value === 'number' && Number.isFinite(value))) {
+      if (
+        ![tp9, af7, af8, tp10].every((value) => typeof value === 'number' && Number.isFinite(value))
+      ) {
         continue;
       }
 
@@ -898,7 +912,9 @@ export class MuseTracker implements Tracker {
     return samples;
   }
 
-  private extractRawOpticsSamples(sourceBuffer: DataPacket[] = this.opticsBuffer): RawOpticsSample[] {
+  private extractRawOpticsSamples(
+    sourceBuffer: DataPacket[] = this.opticsBuffer
+  ): RawOpticsSample[] {
     if (!this.isConnected) {
       return [];
     }
@@ -914,7 +930,9 @@ export class MuseTracker implements Tracker {
       const ch2 = channels?.ch2 ?? values?.[2];
       const ch3 = channels?.ch3 ?? values?.[3];
 
-      if (![ch0, ch1, ch2, ch3].every((value) => typeof value === 'number' && Number.isFinite(value))) {
+      if (
+        ![ch0, ch1, ch2, ch3].every((value) => typeof value === 'number' && Number.isFinite(value))
+      ) {
         continue;
       }
 

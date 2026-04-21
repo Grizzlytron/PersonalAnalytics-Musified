@@ -1,7 +1,7 @@
 {
   "name": "personalanalytics-musified",
   "description": "PersonalAnalytics (musified) is a privacy-protecting, open-source self-monitoring software extended with Muse tracking and biometric data collection",
-  "version": "1.1.28",
+  "version": "1.2.1",
   "main": "dist-electron/main/index.js",
   "type": "module",
   "author": {

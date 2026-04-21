@@ -7,7 +7,7 @@ import { WorkHoursDayDto, WorkHoursDto } from '../../../shared/dto/WorkHoursDto'
 import Switch from '../../components/Switch.vue';
 import StudyInfoDto from '../../../shared/dto/StudyInfoDto';
 
-let workHoursRef = ref<WorkHoursDto>({
+const workHoursRef = ref<WorkHoursDto>({
   monday: { startTime: '', endTime: '', isWorking: false },
   tuesday: { startTime: '', endTime: '', isWorking: false },
   wednesday: { startTime: '', endTime: '', isWorking: false },
@@ -53,7 +53,7 @@ const onChangeWorkHoursIsEnabled = async (e: Event) => {
 
 <template>
   <div class="dark:text-gray-300">
-    <article class="prose prose-lg mt-4 mb-5 dark:prose-invert">
+    <article class="prose prose-lg mb-5 mt-4 dark:prose-invert">
       <h1>
         <span class="primary-blue">Active Times</span>
       </h1>
@@ -65,7 +65,7 @@ const onChangeWorkHoursIsEnabled = async (e: Event) => {
     </article>
 
     <Switch
-      :modelValue="isEnabled"
+      :model-value="isEnabled"
       :label="'Enable/disable active work hours'"
       :on-change="onChangeWorkHoursIsEnabled"
     />

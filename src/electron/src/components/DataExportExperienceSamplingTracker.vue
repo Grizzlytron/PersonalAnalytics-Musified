@@ -2,15 +2,6 @@
 import { PropType } from 'vue';
 import ExperienceSamplingDto from '../../shared/dto/ExperienceSamplingDto';
 
-function formatUtcDateTime(value: Date | string): string {
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return String(value);
-  }
-
-  return parsed.toISOString();
-}
-
 defineProps({
   data: {
     type: Object as PropType<ExperienceSamplingDto[]>,

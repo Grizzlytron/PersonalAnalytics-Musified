@@ -58,7 +58,10 @@ export interface ChoiceQuestion extends ExperienceSamplingQuestionBase {
   responseOptions: string[];
 }
 
-export type ExperienceSamplingQuestion = LikertScaleQuestion | TextResponseQuestion | ChoiceQuestion;
+export type ExperienceSamplingQuestion =
+  | LikertScaleQuestion
+  | TextResponseQuestion
+  | ChoiceQuestion;
 
 export interface MuseTrackerConfiguration {
   enabled: boolean;

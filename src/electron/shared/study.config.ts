@@ -4,7 +4,7 @@ import { DataExportFormat } from './DataExportFormat.enum';
 const studyConfig: StudyConfiguration = {
   name: 'Measuring cognitive load and focus with a biometric headband',
   shortDescription:
-    "This study aims to measure cognitive load and focus on tasks using a Muse S Athena (2025) tracker integrated into PersonalAnalytics. This study uses the self-monitoring software developed by the Human Aspects of Software Engineering Lab of the University of Zurich to non-intrusively collect computer interaction data and store it locally on your computer. Every now and then, a self-reflection question asks you about time well spent and perceived productivity. This software is open source, can be adapted and re-used for your own scientific studies.",
+    'Measuring cognitive load and focus with a biometric headband is a study by Lucas Baer from the University of Zurich. The study aims to measure cognitive load and focus on tasks using a Muse S Athena (2025) biometric tracker in addition to computer usage data from PersonalAnalytics. PersonalAnalytics is the self-monitoring software developed by the Human Aspects of Software Engineering Lab of the University of Zurich to non-intrusively collect computer interaction data and store it locally on your computer. Every now and then, a self-reflection question asks you about time well spent and perceived productivity. PersonalAnalytics is open source, can be adapted and re-used for your own scientific studies. PersonalAnalytics (Musified) as an extension of this software is not open source, but has been extended with the possibility to measure and save biometric data. For any questions or concerns, please contact the study coordinator.',
   infoUrl: 'https://github.com/Grizzlytron/PersonalAnalytics-Musified',
   privacyPolicyUrl:
     'https://github.com/Grizzlytron/PersonalAnalytics-Musified/blob/dev/documentation/PRIVACY.md',
@@ -20,7 +20,7 @@ const studyConfig: StudyConfiguration = {
     enabled: true,
     title: 'Space Crusaders',
     description:
-      "Hello Captain! The Situation is pressing and we need your help. We are currently flying on an intergalactic spaceship while galactic monsters are chasing us across the galaxy. Your mission is to outrun them across 5 levels by making precise gate decisions under pressure. You need to decide when to boost our engine through a gate by pressing J only when the level rule says the gate is open; if it is not open, do not press anything. Watch your Speed Bar: correct guesses give a speed boost, while incorrect guesses cause a speed drop and increase the chance of being caught and eaten by the monsters. After each level, we enter a worm hole that warps us to one of the remaining difficulty levels in random order. Before this, Mission Control will ask you two self-reflection questions. Good luck, Captain!",
+      'Hello Captain! The Situation is pressing and we need your help. We are currently flying on an intergalactic spaceship while galactic monsters are chasing us across the galaxy. Your mission is to outrun them across 5 levels by making precise gate decisions under pressure. You need to decide when to boost our engine through a gate by pressing J only when the level rule says the gate is open; if it is not open, do not press anything. Watch your Speed Bar: correct guesses give a speed boost, while incorrect guesses cause a speed drop and increase the chance of being caught and eaten by the monsters. After each level, we enter a worm hole that warps us to one of the remaining difficulty levels in random order. Before this, Mission Control will ask you two self-reflection questions. Good luck, Captain!',
     scale: 7,
     tasks: [
       {
@@ -87,11 +87,12 @@ const studyConfig: StudyConfiguration = {
           responseOptions: ['not at all focused', 'moderately focused', 'very focused']
         },
         {
-          question: 'Compared to your normal level of mental effort, how mentally demanding did this last interval feel?',
+          question:
+            'Compared to your normal level of mental effort, how mentally demanding did this last interval feel?',
           answerType: 'LikertScale',
           scale: 7,
           responseOptions: ['not at all demanding', 'moderately demanding', 'very demanding']
-        },
+        }
         // {
         //   question: 'Compared to your normal level of mental effort, how much effort did you put in the last session?'
         //   answerType: 'TextResponse',

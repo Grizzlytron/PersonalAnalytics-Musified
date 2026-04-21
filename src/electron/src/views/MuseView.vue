@@ -3,7 +3,9 @@
     <!-- Header -->
     <div class="border-b border-base-300 bg-base-200 p-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <h1 class="flex items-center gap-2 whitespace-nowrap text-2xl font-bold">🧠 Muse Tracker</h1>
+        <h1 class="flex items-center gap-2 whitespace-nowrap text-2xl font-bold">
+          🧠 Muse Tracker
+        </h1>
         <div class="flex flex-wrap items-center justify-end gap-3">
           <div class="badge badge-lg" :class="isTrackerRunning ? 'badge-success' : 'badge-error'">
             {{ isTrackerRunning ? '● Active' : '○ Inactive' }}
@@ -110,7 +112,10 @@
             <div class="flex flex-1 flex-col justify-between gap-3">
               <div>
                 <p class="mb-2 text-xs text-base-content/60">Available Devices:</p>
-                <div v-if="availableDevices.length > 0 && isTrackerRunning" class="max-h-36 space-y-2 overflow-y-auto pr-1">
+                <div
+                  v-if="availableDevices.length > 0 && isTrackerRunning"
+                  class="max-h-36 space-y-2 overflow-y-auto pr-1"
+                >
                   <div
                     v-for="device in availableDevices"
                     :key="device.macAddress"
@@ -118,10 +123,10 @@
                     @click="selectDevice(device)"
                   >
                     <input
+                      v-model="selectedDeviceMac"
                       type="radio"
                       :name="'device-select'"
                       :value="device.macAddress"
-                      v-model="selectedDeviceMac"
                       class="radio radio-xs"
                     />
                     <span class="flex-1 truncate text-sm">{{ device.name }}</span>
@@ -142,9 +147,11 @@
 
               <div class="grid grid-cols-2 gap-2">
                 <button
-                  @click="connectToSelectedDevice"
-                  :disabled="!selectedDeviceMac || isConnecting || !!connectedDevice || !isTrackerRunning"
+                  :disabled="
+                    !selectedDeviceMac || isConnecting || !!connectedDevice || !isTrackerRunning
+                  "
                   class="btn btn-success btn-sm w-full gap-2"
+                  @click="connectToSelectedDevice"
                 >
                   <svg
                     v-if="!isConnecting"
@@ -165,9 +172,9 @@
                   {{ isConnecting ? 'Connecting...' : 'Connect' }}
                 </button>
                 <button
-                  @click="disconnectDevice"
                   :disabled="!connectedDevice || !isTrackerRunning"
                   class="btn btn-error btn-sm w-full gap-2"
+                  @click="disconnectDevice"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -196,9 +203,9 @@
             <h3 class="card-title">🎮 Controls</h3>
             <div class="grid grid-cols-2 gap-2">
               <button
-                @click="startTracking"
                 :disabled="isTrackerRunning"
                 class="btn btn-primary btn-sm gap-2"
+                @click="startTracking"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -223,9 +230,9 @@
                 Start Tracking
               </button>
               <button
-                @click="stopTracking"
                 :disabled="!isTrackerRunning"
                 class="btn btn-secondary btn-sm gap-2"
+                @click="stopTracking"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -650,7 +657,7 @@ const eegChartOptions = computed(() => {
       }
     },
     plugins: {
-      legend: { display: true, position: 'top' as const },
+      legend: { display: true, position: 'top' as const }
     }
   };
 });
@@ -707,7 +714,8 @@ async function loadData() {
       // Only update latestData when the data actually changed to avoid
       // unnecessary Chart.js re-renders that cause freezes
       const incoming = data.latestData || [];
-      const latestTsRaw = incoming.length > 0 ? toValidDate(incoming[incoming.length - 1]?.timestamp) : null;
+      const latestTsRaw =
+        incoming.length > 0 ? toValidDate(incoming[incoming.length - 1]?.timestamp) : null;
       const latestTs = latestTsRaw ? latestTsRaw.getTime() : -1;
       const latestIncoming = incoming.length > 0 ? incoming[incoming.length - 1] : null;
       const qualityHash = [
@@ -745,7 +753,6 @@ async function loadData() {
           eegWindowAnchorMs.value = mapped[0].timestamp.getTime();
         }
       }
-
     }
 
     // Keep dense EEG polling lightweight by moving aggregate metrics to a separate endpoint

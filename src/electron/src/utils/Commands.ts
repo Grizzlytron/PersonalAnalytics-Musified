@@ -99,6 +99,16 @@ type Commands = {
     trackedMinutes: number;
     averageSignalQuality: number;
   }>;
+  'muse:get-connection-health': () => Promise<{
+    isRunning: boolean;
+    connected: boolean;
+    qualityUpdatedAtMs: number | null;
+    signalQuality: number | null;
+    hsiTp9?: number;
+    hsiAf7?: number;
+    hsiAf8?: number;
+    hsiTp10?: number;
+  }>;
   'muse:get-summary-metrics': () => Promise<{
     totalDataPoints: number;
     trackedMinutes: number;

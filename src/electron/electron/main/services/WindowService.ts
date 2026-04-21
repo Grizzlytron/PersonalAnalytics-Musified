@@ -1,16 +1,27 @@
-import { app, BrowserWindow, clipboard, dialog, Menu, nativeImage, nativeTheme, screen, shell, Tray } from 'electron'
-import getMainLogger from '../../config/Logger'
-import AppUpdaterService from './AppUpdaterService'
-import { is } from './utils/helpers'
-import path from 'path'
-import MenuItemConstructorOptions = Electron.MenuItemConstructorOptions
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import studyConfig from '../../../shared/study.config'
-import { DataExportFormat } from '../../../shared/DataExportFormat.enum'
-import { UsageDataService } from './UsageDataService'
-import { UsageDataEventType } from '../../enums/UsageDataEventType.enum'
-import { Settings } from '../entities/Settings'
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  Menu,
+  nativeImage,
+  nativeTheme,
+  screen,
+  shell,
+  Tray
+} from 'electron';
+import getMainLogger from '../../config/Logger';
+import AppUpdaterService from './AppUpdaterService';
+import { is } from './utils/helpers';
+import path from 'path';
+import MenuItemConstructorOptions = Electron.MenuItemConstructorOptions;
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import studyConfig from '../../../shared/study.config';
+import { DataExportFormat } from '../../../shared/DataExportFormat.enum';
+import { UsageDataService } from './UsageDataService';
+import { UsageDataEventType } from '../../enums/UsageDataEventType.enum';
+import { Settings } from '../entities/Settings';
 
 const LOG = getMainLogger('WindowService');
 
@@ -42,7 +53,7 @@ export class WindowService {
   private nBackWindow: BrowserWindow | null = null;
   private nBackCloseSource: NBackCloseSource = 'unknown';
   private nBackSessionContext: NBackSessionContext = {};
-  private retrospectionWindow: BrowserWindow | null = null
+  private retrospectionWindow: BrowserWindow | null = null;
 
   private hasOpenedDataExportUrl: boolean = false;
   private hasRevealedDataEportFolder: boolean = false;
@@ -139,10 +150,10 @@ export class WindowService {
 
   public resizeExperienceSamplingWindow(height: number) {
     if (this.experienceSamplingWindow) {
-      const minHeight = 120
-      const maxHeight = 600
-      const clamped = Math.max(minHeight, Math.min(maxHeight, height))
-      this.experienceSamplingWindow.setContentSize(500, clamped)
+      const minHeight = 120;
+      const maxHeight = 600;
+      const clamped = Math.max(minHeight, Math.min(maxHeight, height));
+      this.experienceSamplingWindow.setContentSize(500, clamped);
     }
   }
 
@@ -266,17 +277,17 @@ export class WindowService {
 
   public closeRetrospectionWindow() {
     if (this.retrospectionWindow) {
-      this.retrospectionWindow.close()
-      this.retrospectionWindow = null
+      this.retrospectionWindow.close();
+      this.retrospectionWindow = null;
     }
   }
 
   public async createRetrospectionWindow() {
-    this.closeRetrospectionWindow()
+    this.closeRetrospectionWindow();
 
-    const __filename = fileURLToPath(import.meta.url)
-    const __dirname = dirname(__filename)
-    const preload = join(__dirname, '../preload/index.mjs')
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const preload = join(__dirname, '../preload/index.mjs');
 
     this.retrospectionWindow = new BrowserWindow({
       width: 850,
@@ -292,21 +303,21 @@ export class WindowService {
       webPreferences: {
         preload
       }
-    })
+    });
 
     if (process.env.VITE_DEV_SERVER_URL) {
-      await this.retrospectionWindow.loadURL(process.env.VITE_DEV_SERVER_URL + '#retrospection')
+      await this.retrospectionWindow.loadURL(process.env.VITE_DEV_SERVER_URL + '#retrospection');
     } else {
       await this.retrospectionWindow.loadFile(path.join(process.env.DIST, 'index.html'), {
         hash: 'retrospection'
-      })
+      });
     }
 
-    this.retrospectionWindow.show()
+    this.retrospectionWindow.show();
 
     this.retrospectionWindow.on('close', () => {
-      this.retrospectionWindow = null
-    })
+      this.retrospectionWindow = null;
+    });
   }
 
   private destroyDataExportWindow() {
@@ -343,7 +354,9 @@ export class WindowService {
   }
 
   public isNBackWindowOpen(): boolean {
-    return this.nBackWindow !== null && this.nBackWindow !== undefined && !this.nBackWindow.isDestroyed();
+    return (
+      this.nBackWindow !== null && this.nBackWindow !== undefined && !this.nBackWindow.isDestroyed()
+    );
   }
 
   public async createMuseWindow(goToStep?: string) {
@@ -461,7 +474,9 @@ export class WindowService {
       });
 
       UsageDataService.createNewUsageDataEvent(
-        abandoned ? UsageDataEventType.NBackWindowAbandoned : UsageDataEventType.NBackWindowCompleted,
+        abandoned
+          ? UsageDataEventType.NBackWindowAbandoned
+          : UsageDataEventType.NBackWindowCompleted,
         additionalInformation
       );
 

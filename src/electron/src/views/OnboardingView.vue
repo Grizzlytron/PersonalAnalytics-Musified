@@ -319,7 +319,7 @@ const onChangeActiveTimesEnabled = async (e: Event) => {
 
           <div class="mb-4 mt-6">
             <Switch
-              :modelValue="activeTimesEnabled"
+              :model-value="activeTimesEnabled"
               :label="'Enable/disable active work hours'"
               :on-change="onChangeActiveTimesEnabled"
             />

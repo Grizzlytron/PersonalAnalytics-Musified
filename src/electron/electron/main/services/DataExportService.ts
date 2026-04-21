@@ -5,7 +5,7 @@ import path from 'path';
 import { app } from 'electron';
 import { is } from './utils/helpers';
 import fs from 'node:fs';
-import { File, Blob } from 'node:buffer';
+import { Blob } from 'node:buffer';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { WindowActivityEntity } from '../entities/WindowActivityEntity';
 import { WindowActivityTrackerService } from './trackers/WindowActivityTrackerService';

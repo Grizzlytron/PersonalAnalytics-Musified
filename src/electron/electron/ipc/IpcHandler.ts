@@ -24,8 +24,14 @@ import DOMPurify from 'dompurify';
 import { WorkScheduleService } from 'electron/main/services/WorkScheduleService';
 import { WorkHoursDto } from 'shared/dto/WorkHoursDto';
 import { MuseRawEegEntity } from '../main/entities/MuseRawEegEntity';
-import { getActivitySessions, getAppUsageSessions, getLongestTimeActiveInsight, ActivitySessions, TimeActive } from '../main/services/RetrospectionService'
-import { SchedulingService } from '../main/services/SchedulingService'
+import {
+  getActivitySessions,
+  getAppUsageSessions,
+  getLongestTimeActiveInsight,
+  ActivitySessions,
+  TimeActive
+} from '../main/services/RetrospectionService';
+import { SchedulingService } from '../main/services/SchedulingService';
 import path from 'path';
 import type { ExperienceSamplingAnswerType } from '../../shared/StudyConfiguration';
 import type { NBackTaskBlockDto } from '../../shared/dto/NBackTaskBlockDto';
@@ -110,6 +116,7 @@ export class IpcHandler {
       openRetrospection: this.openRetrospection,
       closeRetrospectionWindow: this.closeRetrospectionWindow,
       'muse:get-tracker-status': this.getMuseTrackerStatus,
+      'muse:get-connection-health': this.getMuseConnectionHealth,
       'muse:get-summary-metrics': this.getMuseSummaryMetrics,
       'muse:start-tracker': this.startMuseTracker,
       'muse:stop-tracker': this.stopMuseTracker,
@@ -340,7 +347,8 @@ export class IpcHandler {
       cancelId: 1,
       title: 'Confirm Data Donation',
       message: `Do you agree to donate and upload your data to the ${studyConfig.name} study?`,
-      detail: 'Your data will be uploaded via a secure, encrypted connection to a secure, encrypted store operated by the University of Zurich (Data Donation Lab). Your data will be processed in accordance with the study\'s consent form.'
+      detail:
+        "Your data will be uploaded via a secure, encrypted connection to a secure, encrypted store operated by the University of Zurich (Data Donation Lab). Your data will be processed in accordance with the study's consent form."
     });
     return response === 0;
   }
@@ -387,7 +395,9 @@ export class IpcHandler {
     }
   }
 
-  private async retrospectionGetTopThreeMostActiveApps(date: Date): Promise<ActivitySessions[] | undefined> {
+  private async retrospectionGetTopThreeMostActiveApps(
+    date: Date
+  ): Promise<ActivitySessions[] | undefined> {
     try {
       return (await getAppUsageSessions(new Date(date)))
         .sort((a, b) => b.totalDurationMs - a.totalDurationMs)
@@ -420,14 +430,17 @@ export class IpcHandler {
     }
 
     this.museStatusMetricsRefreshPromise = (async () => {
-      const [totalDataPoints, trackedMinutes] = await Promise.all([
-        MuseRawEegEntity.count(),
+      const [totalRows, trackedMinutes] = await Promise.all([
+        MuseRawEegEntity.getRepository().query(
+          'SELECT COALESCE(MAX(id), 0) AS max_id FROM muse_raw_eeg'
+        ),
         museService.getRawEegTrackedMinutes()
       ]);
+      const totalDataPoints = Number(totalRows?.[0]?.max_id ?? 0);
 
       this.museStatusMetrics = {
         lastRefreshedAt: Date.now(),
-        totalDataPoints,
+        totalDataPoints: Number.isFinite(totalDataPoints) ? totalDataPoints : 0,
         trackedMinutes
       };
     })();
@@ -440,10 +453,19 @@ export class IpcHandler {
   }
 
   private downsampleRawEegForUi(
-    raw: Array<{ id: number; timestamp: Date; tp9: number; af7: number; af8: number; tp10: number }>,
+    raw: Array<{
+      id: number;
+      timestamp: Date;
+      tp9: number;
+      af7: number;
+      af8: number;
+      tp10: number;
+    }>,
     sampleIntervalMs: number
   ): Array<{ id: number; timestamp: Date; tp9: number; af7: number; af8: number; tp10: number }> {
-    const validSamples = raw.filter((sample) => Number.isFinite(new Date(sample.timestamp).getTime()));
+    const validSamples = raw.filter((sample) =>
+      Number.isFinite(new Date(sample.timestamp).getTime())
+    );
     if (validSamples.length <= 1) {
       return validSamples;
     }
@@ -603,6 +625,84 @@ export class IpcHandler {
     }
   }
 
+  private async getMuseConnectionHealth(): Promise<{
+    isRunning: boolean;
+    connected: boolean;
+    qualityUpdatedAtMs: number | null;
+    signalQuality: number | null;
+    hsiTp9?: number;
+    hsiAf7?: number;
+    hsiAf8?: number;
+    hsiTp10?: number;
+  }> {
+    try {
+      const runningTrackers = this.trackerService.getRunningTrackerNames();
+      const isMuseRunning = runningTrackers.includes('MuseTracker');
+      const tracker = this.trackerService.getTracker('MuseTracker') as any;
+      const isConnected = !!tracker?.isDeviceConnected?.();
+
+      if (!isMuseRunning || !isConnected) {
+        return {
+          isRunning: isMuseRunning,
+          connected: false,
+          qualityUpdatedAtMs: null,
+          signalQuality: null
+        };
+      }
+
+      const museService = new MuseTrackerService();
+      const latestMetadata = await museService.getLatestMetadata();
+      const liveQuality = tracker?.getLiveQualitySnapshot?.();
+
+      const pickFinite = (...values: Array<number | null | undefined>): number | undefined => {
+        for (const value of values) {
+          if (typeof value === 'number' && Number.isFinite(value)) {
+            return value;
+          }
+        }
+        return undefined;
+      };
+
+      const signalQuality = pickFinite(liveQuality?.signalQuality, latestMetadata?.signalQuality);
+      const hsiTp9 = pickFinite(liveQuality?.hsiTp9, latestMetadata?.hsiTp9);
+      const hsiAf7 = pickFinite(liveQuality?.hsiAf7, latestMetadata?.hsiAf7);
+      const hsiAf8 = pickFinite(liveQuality?.hsiAf8, latestMetadata?.hsiAf8);
+      const hsiTp10 = pickFinite(liveQuality?.hsiTp10, latestMetadata?.hsiTp10);
+
+      const qualityUpdatedAtMs =
+        (typeof liveQuality?.updatedAtMs === 'number' && Number.isFinite(liveQuality.updatedAtMs)
+          ? liveQuality.updatedAtMs
+          : undefined) ??
+        (() => {
+          if (!latestMetadata?.timestamp) {
+            return undefined;
+          }
+          const ts = new Date(latestMetadata.timestamp).getTime();
+          return Number.isFinite(ts) ? ts : undefined;
+        })() ??
+        null;
+
+      return {
+        isRunning: true,
+        connected: true,
+        qualityUpdatedAtMs,
+        signalQuality: signalQuality ?? null,
+        hsiTp9,
+        hsiAf7,
+        hsiAf8,
+        hsiTp10
+      };
+    } catch (error) {
+      LOG.error('Error getting Muse connection health', error);
+      return {
+        isRunning: false,
+        connected: false,
+        qualityUpdatedAtMs: null,
+        signalQuality: null
+      };
+    }
+  }
+
   private async getMuseSummaryMetrics(): Promise<{
     totalDataPoints: number;
     trackedMinutes: number;
@@ -679,10 +779,11 @@ export class IpcHandler {
     try {
       const museService = new MuseTrackerService();
       const previewLimit = 5000;
-      const [previewData, totalDataPoints] = await Promise.all([
-        museService.getRawEegDataForExport(previewLimit),
-        MuseRawEegEntity.count()
-      ]);
+      const totalRows = await MuseRawEegEntity.getRepository().query(
+        'SELECT COALESCE(MAX(id), 0) AS max_id FROM muse_raw_eeg'
+      );
+      const totalDataPoints = Number(totalRows?.[0]?.max_id ?? 0);
+      const previewData = await museService.getRawEegDataForExport(previewLimit);
 
       return {
         data: previewData.map((d) => ({
@@ -693,7 +794,7 @@ export class IpcHandler {
           channel3_AF8: d.af8,
           channel4_TP10: d.tp10
         })),
-        totalDataPoints,
+        totalDataPoints: Number.isFinite(totalDataPoints) ? totalDataPoints : 0,
         previewLimit
       };
     } catch (error) {

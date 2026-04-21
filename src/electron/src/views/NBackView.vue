@@ -2,14 +2,9 @@
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
 import nBackConfig from '../../shared/nBack.config';
 import studyConfig from '../../shared/study.config';
-import type {
-  NBackTaskDefinition
-} from '../../shared/StudyConfiguration';
+import type { NBackTaskDefinition } from '../../shared/StudyConfiguration';
 import type { NBackTaskBlockDto } from '../../shared/dto/NBackTaskBlockDto';
-import {
-  NBackGridCellIndex,
-  useNBackTask
-} from '../modules/nback/useNBackTask';
+import { NBackGridCellIndex, useNBackTask } from '../modules/nback/useNBackTask';
 import typedIpcRenderer from '../utils/typedIpcRenderer';
 
 type WorkflowState = 'setup' | 'task-ready' | 'task-running' | 'reflection' | 'completed';
@@ -71,7 +66,9 @@ if (!rawInterfaceConfig.tasks?.length) {
 }
 
 if (!rawInterfaceConfig.reflectionQuestions || rawInterfaceConfig.reflectionQuestions.length < 2) {
-  throw new Error('studyConfig.nBackInterface.reflectionQuestions must contain at least two questions.');
+  throw new Error(
+    'studyConfig.nBackInterface.reflectionQuestions must contain at least two questions.'
+  );
 }
 
 if (typeof rawInterfaceConfig.distractionDotCount !== 'number') {
@@ -187,9 +184,7 @@ function createLaserBeams(count: number): LaserBeamEffect[] {
   }));
 }
 
-const distractionDots = ref(
-  createDistractionDots(distractionDotCount)
-);
+const distractionDots = ref(createDistractionDots(distractionDotCount));
 const meteorites = ref(createMeteorites(meteoriteCount));
 const laserBeams = ref(createLaserBeams(laserBeamCount));
 
@@ -293,7 +288,7 @@ function getLevelGoalOverview(taskDef: NBackTaskDefinition | null): string {
     return 'Press J when the current gate matches the gate from 3 trials ago (3-back).';
   }
 
-  return 'Press J only when the current gate matches this level\'s N-back rule.';
+  return "Press J only when the current gate matches this level's N-back rule.";
 }
 
 const currentLevelGoalOverview = computed(() => getLevelGoalOverview(currentTask.value));
@@ -560,7 +555,8 @@ const speedPercentDisplay = computed(() => {
   }
 
   const score = speedRelevantTrialResults.value.reduce((acc, trial) => {
-    const isTargetTrial = trial.expectedSquare !== null && trial.stimulusSquare === trial.expectedSquare;
+    const isTargetTrial =
+      trial.expectedSquare !== null && trial.stimulusSquare === trial.expectedSquare;
     const pressedActionButton = trial.responded && trial.pressedKey?.trim().toUpperCase() === 'J';
 
     if (isTargetTrial) {
@@ -588,7 +584,9 @@ const showDistractions = computed(
   () => workflowState.value === 'task-running' && currentTask.value?.withDistractions === true
 );
 const museIndicatorClass = computed(() => {
-  return museConnectionState.value === 'disconnected' ? 'muse-indicator-warning' : 'muse-indicator-bad';
+  return museConnectionState.value === 'disconnected'
+    ? 'muse-indicator-warning'
+    : 'muse-indicator-bad';
 });
 const museIndicatorText = computed(() => {
   if (museConnectionState.value === 'disconnected') {
@@ -609,20 +607,15 @@ async function refreshMuseConnectionStatus() {
 
   museStatusRequestInFlight = true;
   try {
-    const status = await typedIpcRenderer.invoke('muse:get-tracker-status', false);
-    if (!status?.connectedDevice) {
+    const status = await typedIpcRenderer.invoke('muse:get-connection-health');
+    if (!status?.connected) {
       museConnectionState.value = 'disconnected';
       return;
     }
 
-    const latestData = status.latestData ?? [];
-    const latestSample = latestData.length > 0 ? latestData[latestData.length - 1] : null;
-    const hsiValues = [
-      latestSample?.hsiTp9,
-      latestSample?.hsiAf7,
-      latestSample?.hsiAf8,
-      latestSample?.hsiTp10
-    ].filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+    const hsiValues = [status.hsiTp9, status.hsiAf7, status.hsiAf8, status.hsiTp10].filter(
+      (v): v is number => typeof v === 'number' && Number.isFinite(v)
+    );
 
     if (hsiValues.length > 0) {
       if (hsiValues.every((value) => value <= 1)) {
@@ -639,7 +632,7 @@ async function refreshMuseConnectionStatus() {
       return;
     }
 
-    const scalarQuality = status.connectedDevice.signalQuality;
+    const scalarQuality = status.signalQuality;
     if (typeof scalarQuality === 'number' && Number.isFinite(scalarQuality)) {
       museConnectionState.value = scalarQuality === 4 ? 'bad' : 'good';
       return;
@@ -718,9 +711,7 @@ function prepareCurrentTask() {
   saveError.value = null;
 
   if (taskDef.withDistractions === true) {
-    distractionDots.value = createDistractionDots(
-      distractionDotCount
-    );
+    distractionDots.value = createDistractionDots(distractionDotCount);
     meteorites.value = createMeteorites(meteoriteCount);
     laserBeams.value = createLaserBeams(laserBeamCount);
   }
@@ -1057,7 +1048,10 @@ onUnmounted(() => {
 
     <div v-else class="completed-container">
       <h2>Escape complete, you have reached the Target Dimension!</h2>
-      <p>Thank you for your great guidance today Captain, you saved us from the galactic monsters. Keep up the good work!</p>
+      <p>
+        Thank you for your great guidance today Captain, you saved us from the galactic monsters.
+        Keep up the good work!
+      </p>
       <p>This was it for today's session, please return tomorrow for another space escape!</p>
       <button class="btn btn-primary" type="button" @click="closeNBackWindowAndReturn">
         Return to own PC Dimension
@@ -1516,7 +1510,13 @@ onUnmounted(() => {
   position: absolute;
   border-radius: 999px;
   background:
-    radial-gradient(circle at 32% 28%, rgba(255, 248, 227, 0.9), rgba(217, 178, 124, 0.78) 34%, rgba(128, 92, 60, 0.95) 72%, rgba(74, 50, 35, 1) 100%),
+    radial-gradient(
+      circle at 32% 28%,
+      rgba(255, 248, 227, 0.9),
+      rgba(217, 178, 124, 0.78) 34%,
+      rgba(128, 92, 60, 0.95) 72%,
+      rgba(74, 50, 35, 1) 100%
+    ),
     radial-gradient(circle at 76% 66%, rgba(51, 34, 21, 0.45), rgba(24, 15, 10, 0.8));
   box-shadow:
     0 0 12px rgba(245, 158, 11, calc(0.3 * var(--meteor-intensity))),
@@ -1623,14 +1623,12 @@ onUnmounted(() => {
   }
   70% {
     opacity: calc(0.2 * var(--meteor-intensity));
-    transform: translate3d(var(--meteor-travel-x), var(--meteor-travel-y), 0)
-      scale(1.12)
+    transform: translate3d(var(--meteor-travel-x), var(--meteor-travel-y), 0) scale(1.12)
       rotate(var(--meteor-rotation));
   }
   88% {
     opacity: 0;
-    transform: translate3d(var(--meteor-travel-x), var(--meteor-travel-y), 0)
-      scale(1.18)
+    transform: translate3d(var(--meteor-travel-x), var(--meteor-travel-y), 0) scale(1.18)
       rotate(var(--meteor-rotation));
   }
 }

@@ -267,7 +267,9 @@ export function useNBackTask(config: NBackTaskConfig) {
     }
 
     const isSameTruth =
-      expectedSquare.value !== null && currentStimulusSquare !== null && expectedSquare.value === currentStimulusSquare;
+      expectedSquare.value !== null &&
+      currentStimulusSquare !== null &&
+      expectedSquare.value === currentStimulusSquare;
     const reactionTimeMs =
       responsePhaseStartedAtMs === null ? null : Math.max(0, Date.now() - responsePhaseStartedAtMs);
 

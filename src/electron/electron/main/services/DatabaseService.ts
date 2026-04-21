@@ -49,7 +49,15 @@ export class DatabaseService {
       database: this.dbPath,
       synchronize: true,
       logging: false,
-      entities: ENTITIES
+      entities: ENTITIES,
+      prepareDatabase: (db: any) => {
+        // WAL + NORMAL keeps writes durable enough while avoiding UI-impacting fsync pressure.
+        db.pragma('journal_mode = WAL');
+        db.pragma('synchronous = NORMAL');
+        db.pragma('busy_timeout = 5000');
+        db.pragma('temp_store = MEMORY');
+        db.pragma('cache_size = -20000');
+      }
     };
 
     this.dataSource = new DataSource(options);

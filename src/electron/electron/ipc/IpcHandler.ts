@@ -24,6 +24,7 @@ import DOMPurify from 'dompurify';
 import { WorkScheduleService } from 'electron/main/services/WorkScheduleService';
 import { WorkHoursDto } from 'shared/dto/WorkHoursDto';
 import { MuseRawEegEntity } from '../main/entities/MuseRawEegEntity';
+import { MuseRawOpticsEntity } from '../main/entities/MuseRawOpticsEntity';
 import {
   getActivitySessions,
   getAppUsageSessions,
@@ -121,6 +122,7 @@ export class IpcHandler {
       'muse:start-tracker': this.startMuseTracker,
       'muse:stop-tracker': this.stopMuseTracker,
       'muse:get-data-for-export': this.getMuseDataForExport,
+      'muse:get-optics-for-export': this.getMuseOpticsForExport,
       'muse:get-discovered-devices': this.getDiscoveredDevices,
       'muse:connect-device': this.connectToDevice,
       'muse:disconnect-device': this.disconnectDevice
@@ -802,6 +804,43 @@ export class IpcHandler {
         data: [],
         totalDataPoints: 0,
         previewLimit: 5000
+      };
+    }
+  }
+
+  private async getMuseOpticsForExport(): Promise<{
+    data: Array<{ id: number; timestamp: Date; ch0: number; ch1: number; ch2: number; ch3: number }>;
+    totalDataPoints: number;
+  }> {
+    try {
+      const previewLimit = 100;
+      const totalRows = await MuseRawOpticsEntity.getRepository().query(
+        'SELECT COALESCE(MAX(id), 0) AS max_id FROM muse_raw_optics'
+      );
+      const totalDataPoints = Number(totalRows?.[0]?.max_id ?? 0);
+
+      const recent = await MuseRawOpticsEntity.find({
+        order: { timestamp: 'DESC' },
+        take: previewLimit
+      });
+      const previewData = recent.reverse();
+
+      return {
+        data: previewData.map((d) => ({
+          id: d.id,
+          timestamp: d.timestamp,
+          ch0: d.ch0,
+          ch1: d.ch1,
+          ch2: d.ch2,
+          ch3: d.ch3
+        })),
+        totalDataPoints: Number.isFinite(totalDataPoints) ? totalDataPoints : 0
+      };
+    } catch (error) {
+      LOG.error('Error getting Muse optics data for export', error);
+      return {
+        data: [],
+        totalDataPoints: 0
       };
     }
   }

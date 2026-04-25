@@ -27,8 +27,10 @@
         <p class="bg-slate-800 p-5 text-lg text-white">This data is not being shared</p>
       </div>
 
-      <div class="mb-4">
-        <p class="mb-2 text-sm text-base-content/60">Total Data Points: {{ totalDataPoints }}</p>
+      <!-- EEG Data -->
+      <div class="mb-2">
+        <h4 class="mb-1 text-sm font-semibold">EEG Data</h4>
+        <p class="mb-1 text-sm text-base-content/60">Total Data Points: {{ totalDataPoints }}</p>
         <p class="text-xs text-base-content/50">Showing first 100 data points</p>
       </div>
 
@@ -54,23 +56,43 @@
           </tbody>
         </table>
       </div>
-    </div>
 
-    <div class="mt-4 rounded-lg bg-base-100 p-4">
-      <h4 class="mb-2 text-sm font-semibold">Data Summary</h4>
-      <div class="grid grid-cols-2 gap-2 text-sm">
-        <div>
-          <span class="text-base-content/60">Date Range:</span>
-          <span class="font-semibold">{{ dateRange }}</span>
-        </div>
+      <!-- Optics Data -->
+      <div class="mb-2 mt-6">
+        <h4 class="mb-1 text-sm font-semibold">Optics Data</h4>
+        <p class="mb-1 text-sm text-base-content/60">Total Data Points: {{ opticsTotalDataPoints }}</p>
+        <p class="text-xs text-base-content/50">Showing first 100 data points</p>
       </div>
+
+      <div class="max-h-96 w-full overflow-y-auto">
+        <table class="table table-sm w-full">
+          <thead class="sticky top-0 bg-base-300">
+            <tr>
+              <th>Timestamp</th>
+              <th>Ch0</th>
+              <th>Ch1</th>
+              <th>Ch2</th>
+              <th>Ch3</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, index) in displayedOpticsData" :key="index" class="hover">
+              <td class="text-xs">{{ formatTimestamp(row.timestamp) }}</td>
+              <td class="text-xs">{{ formatNumber(row.ch0) }}</td>
+              <td class="text-xs">{{ formatNumber(row.ch1) }}</td>
+              <td class="text-xs">{{ formatNumber(row.ch2) }}</td>
+              <td class="text-xs">{{ formatNumber(row.ch3) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
-import { DataExportType } from '../../shared/DataExportType.enum';
+import { ref, onMounted, computed } from 'vue';import { DataExportType } from '../../shared/DataExportType.enum';
 import typedIpcRenderer from '../utils/typedIpcRenderer';
 
 interface MuseData {
@@ -80,6 +102,15 @@ interface MuseData {
   channel2_AF7?: number;
   channel3_AF8?: number;
   channel4_TP10?: number;
+}
+
+interface OpticsData {
+  id: number;
+  timestamp: Date;
+  ch0: number;
+  ch1: number;
+  ch2: number;
+  ch3: number;
 }
 
 const props = defineProps<{
@@ -95,19 +126,19 @@ const data = ref<MuseData[]>([]);
 const maxDisplayed = ref(100);
 const totalDataPoints = ref(0);
 
+const opticsData = ref<OpticsData[]>([]);
+const opticsTotalDataPoints = ref(0);
+
 onMounted(async () => {
-  await loadData();
+  await Promise.all([loadData(), loadOpticsData()]);
 });
 
 const displayedData = computed(() => {
   return data.value.slice(0, maxDisplayed.value);
 });
 
-const dateRange = computed(() => {
-  if (data.value.length === 0) return 'No data';
-  const start = formatTimestamp(data.value[0].timestamp);
-  const end = formatTimestamp(data.value[data.value.length - 1].timestamp);
-  return `${start} - ${end}`;
+const displayedOpticsData = computed(() => {
+  return opticsData.value.slice(0, maxDisplayed.value);
 });
 
 async function loadData() {
@@ -130,6 +161,19 @@ async function loadData() {
   }
 }
 
+async function loadOpticsData() {
+  try {
+    const result = await typedIpcRenderer.invoke('muse:get-optics-for-export');
+    opticsData.value = (result?.data ?? []).map((d: any) => ({
+      ...d,
+      timestamp: new Date(d.timestamp)
+    }));
+    opticsTotalDataPoints.value = result?.totalDataPoints ?? 0;
+  } catch (error) {
+    console.error('Error loading Muse optics data for export:', error);
+  }
+}
+
 function toggleDataSelection() {
   selectedOption.value =
     selectedOption.value === DataExportType.None ? DataExportType.All : DataExportType.None;
@@ -137,8 +181,7 @@ function toggleDataSelection() {
 }
 
 function formatTimestamp(date: Date): string {
-  const d = new Date(date);
-  return d.toLocaleString('en-US');
+  return new Date(date).toLocaleString();
 }
 
 function formatNumber(value: number | undefined | null): string {

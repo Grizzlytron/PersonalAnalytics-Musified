@@ -128,6 +128,17 @@ type Commands = {
     totalDataPoints: number;
     previewLimit: number;
   }>;
+  'muse:get-optics-for-export': () => Promise<{
+    data: Array<{
+      id: number;
+      timestamp: Date | string;
+      ch0: number;
+      ch1: number;
+      ch2: number;
+      ch3: number;
+    }>;
+    totalDataPoints: number;
+  }>;
   'muse:get-discovered-devices': () => Promise<
     Array<{ name: string; macAddress: string; rssi: number }>
   >;

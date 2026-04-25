@@ -32,20 +32,7 @@ type MeteoriteEffect = {
   sizePx: number;
   travelX: number;
   travelY: number;
-  rotationDeg: number;
-  durationMs: number;
-  delayMs: number;
-  intensity: number;
-};
-
-type LaserBeamEffect = {
-  id: number;
-  topPercent: number;
-  leftPercent: number;
-  lengthPx: number;
-  thicknessPx: number;
-  travelX: number;
-  travelY: number;
+  trailAngleDeg: number;
   rotationDeg: number;
   durationMs: number;
   delayMs: number;
@@ -53,7 +40,6 @@ type LaserBeamEffect = {
 };
 
 const meteoriteCount = 11;
-const laserBeamCount = 7;
 
 const rawInterfaceConfig = studyConfig.nBackInterface;
 
@@ -153,40 +139,84 @@ function createDistractionDots(count: number): DistractionDot[] {
   }));
 }
 
-function createMeteorites(count: number): MeteoriteEffect[] {
-  return Array.from({ length: count }, (_, index) => ({
-    id: index,
-    topPercent: -22 + Math.floor(Math.random() * 144),
-    leftPercent: -35 + Math.floor(Math.random() * 170),
-    sizePx: 26 + Math.floor(Math.random() * 54),
-    travelX: -1000 + Math.floor(Math.random() * 2000),
-    travelY: -620 + Math.floor(Math.random() * 1240),
-    rotationDeg: -30 + Math.floor(Math.random() * 60),
-    durationMs: 650 + Math.floor(Math.random() * 1400),
-    delayMs: Math.floor(Math.random() * 1400),
-    intensity: 0.55 + Math.random() * 0.4
-  }));
+const meteorMinTravelDistancePx = 760;
+const meteorMaxTravelDistancePx = 1280;
+// Only 60% of the animation duration is actual travel (keyframes 18%→78%).
+// So raw duration = distance / speed, then clamped. Target effective travel
+// speed is ~0.3 px/ms → raw speed = 0.3 * 0.6 ≈ 0.18 px/ms.
+const meteorTargetSpeedPxPerMs = 0.18;
+const meteorSpeedVariance = 0.05;
+const meteorMinDurationMs = 3000;
+const meteorMaxDurationMs = 4500;
+
+function createMeteorMotionProfile(): { travelX: number; travelY: number; trailAngleDeg: number; durationMs: number } {
+  const angleRad = Math.random() * Math.PI * 2;
+  const distancePx =
+    meteorMinTravelDistancePx +
+    Math.random() * (meteorMaxTravelDistancePx - meteorMinTravelDistancePx);
+  const effectiveSpeedPxPerMs =
+    meteorTargetSpeedPxPerMs *
+    (1 - meteorSpeedVariance + Math.random() * meteorSpeedVariance * 2);
+
+  const travelX = Math.round(Math.cos(angleRad) * distancePx);
+  const travelY = Math.round(Math.sin(angleRad) * distancePx * 0.72);
+  const rawDurationMs = Math.round(distancePx / effectiveSpeedPxPerMs);
+  const durationMs = Math.min(meteorMaxDurationMs, Math.max(meteorMinDurationMs, rawDurationMs));
+  // Trail points opposite to travel direction.
+  const trailAngleDeg = Math.round(Math.atan2(travelY, travelX) * (180 / Math.PI)) + 180;
+
+  return {
+    travelX,
+    travelY,
+    trailAngleDeg,
+    durationMs
+  };
 }
 
-function createLaserBeams(count: number): LaserBeamEffect[] {
-  return Array.from({ length: count }, (_, index) => ({
-    id: index,
-    topPercent: 2 + Math.floor(Math.random() * 92),
-    leftPercent: -12 + Math.floor(Math.random() * 124),
-    lengthPx: 120 + Math.floor(Math.random() * 260),
-    thicknessPx: 2 + Math.floor(Math.random() * 3),
-    travelX: -280 + Math.floor(Math.random() * 560),
-    travelY: -70 + Math.floor(Math.random() * 140),
-    rotationDeg: -18 + Math.floor(Math.random() * 36),
-    durationMs: 900 + Math.floor(Math.random() * 1400),
-    delayMs: Math.floor(Math.random() * 1700),
-    intensity: 0.35 + Math.random() * 0.45
-  }));
+function createMeteorites(count: number): MeteoriteEffect[] {
+  return Array.from({ length: count }, (_, index) => {
+    const motion = createMeteorMotionProfile();
+
+    return {
+      id: index,
+      topPercent: -26 + Math.floor(Math.random() * 152),
+      leftPercent: -40 + Math.floor(Math.random() * 182),
+      sizePx: 26 + Math.floor(Math.random() * 54),
+      travelX: motion.travelX,
+      travelY: motion.travelY,
+      trailAngleDeg: motion.trailAngleDeg,
+      rotationDeg: -36 + Math.floor(Math.random() * 72),
+      durationMs: motion.durationMs,
+      delayMs: Math.floor(Math.random() * 2600),
+      intensity: 0.55 + Math.random() * 0.4
+    };
+  });
+}
+
+function rerollMeteoriteTrajectory(meteorId: number): void {
+  const meteorIndex = meteorites.value.findIndex((meteor) => meteor.id === meteorId);
+  if (meteorIndex < 0) {
+    return;
+  }
+
+  const currentMeteor = meteorites.value[meteorIndex];
+  const motion = createMeteorMotionProfile();
+
+  meteorites.value[meteorIndex] = {
+    ...currentMeteor,
+    topPercent: -26 + Math.floor(Math.random() * 152),
+    leftPercent: -40 + Math.floor(Math.random() * 182),
+    travelX: motion.travelX,
+    travelY: motion.travelY,
+    trailAngleDeg: motion.trailAngleDeg,
+    rotationDeg: -36 + Math.floor(Math.random() * 72),
+    durationMs: motion.durationMs,
+    intensity: 0.55 + Math.random() * 0.4
+  };
 }
 
 const distractionDots = ref(createDistractionDots(distractionDotCount));
 const meteorites = ref(createMeteorites(meteoriteCount));
-const laserBeams = ref(createLaserBeams(laserBeamCount));
 
 const currentTask = computed(() => taskSequence.value[currentTaskIndex.value] ?? null);
 const currentTaskTotalTrials = computed(
@@ -273,19 +303,19 @@ function getLevelGoalOverview(taskDef: NBackTaskDefinition | null): string {
   }
 
   if (taskDef.n === 1) {
-    return 'Press J when the current gate matches the immediately previous gate (1-back).';
+    return 'Press J when the current gate matches the immediately previous gate.';
   }
 
   if (taskDef.n === 2 && taskDef.withDistractions !== true) {
-    return 'Press J when the current gate matches the gate from 2 trials ago (2-back).';
+    return 'Press J when the current gate matches the gate from 2 trials ago.';
   }
 
   if (taskDef.n === 2 && taskDef.withDistractions === true) {
-    return 'Press J when the current gate matches the gate from 2 trials ago, while ignoring flickers, meteorites, and laser streaks in the background.';
+    return 'Press J when the current gate matches the gate from 2 trials ago, while ignoring star flickers and meteorites in the background.';
   }
 
   if (taskDef.n === 3) {
-    return 'Press J when the current gate matches the gate from 3 trials ago (3-back).';
+    return 'Press J when the current gate matches the gate from 3 trials ago.';
   }
 
   return "Press J only when the current gate matches this level's N-back rule.";
@@ -561,15 +591,14 @@ const speedPercentDisplay = computed(() => {
 
     if (isTargetTrial) {
       if (pressedActionButton && trial.isCorrect) {
-        return acc + 2;
+        return acc + 3;
       }
 
-      // Target shown but no correct press: count as missed boost opportunity.
-      return acc - 3;
+      return acc - 4;
     }
 
     if (pressedActionButton) {
-      return acc - 3;
+      return acc - 4;
     }
 
     return acc;
@@ -594,7 +623,7 @@ const museIndicatorText = computed(() => {
   }
 
   if (museConnectionState.value === 'bad') {
-    return 'Muse: Bad Connection';
+    return 'Muse: Bad Connection - Avoid doing any excessive movements.';
   }
 
   return '';
@@ -713,7 +742,6 @@ function prepareCurrentTask() {
   if (taskDef.withDistractions === true) {
     distractionDots.value = createDistractionDots(distractionDotCount);
     meteorites.value = createMeteorites(meteoriteCount);
-    laserBeams.value = createLaserBeams(laserBeamCount);
   }
 
   activeTask.value = createTaskForCurrentBlock(taskDef);
@@ -885,7 +913,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="n-back-screen bg-base-100 text-base-content">
+  <div class="n-back-screen bg-base-100 text-base-content" :class="{ 'stars-paused': workflowState === 'task-running' }">
     <div v-if="shouldShowMuseWarning" class="muse-indicator" :class="museIndicatorClass">
       <span class="muse-indicator-dot" />
       <span>{{ museIndicatorText }}</span>
@@ -926,6 +954,7 @@ onUnmounted(() => {
           :key="meteor.id"
           class="meteorite"
           aria-hidden="true"
+          @animationiteration="rerollMeteoriteTrajectory(meteor.id)"
           :style="{
             top: `${meteor.topPercent}%`,
             left: `${meteor.leftPercent}%`,
@@ -936,29 +965,12 @@ onUnmounted(() => {
             '--meteor-delay': `${meteor.delayMs}ms`,
             '--meteor-travel-x': `${meteor.travelX}px`,
             '--meteor-travel-y': `${meteor.travelY}px`,
+            '--meteor-trail-angle': `${meteor.trailAngleDeg}deg`,
             '--meteor-rotation': `${meteor.rotationDeg}deg`,
             '--meteor-intensity': `${meteor.intensity}`
           }"
         />
 
-        <span
-          v-for="beam in laserBeams"
-          :key="`laser-${beam.id}`"
-          class="laser-beam"
-          aria-hidden="true"
-          :style="{
-            top: `${beam.topPercent}%`,
-            left: `${beam.leftPercent}%`,
-            width: `${beam.lengthPx}px`,
-            height: `${beam.thicknessPx}px`,
-            '--laser-duration': `${beam.durationMs}ms`,
-            '--laser-delay': `${beam.delayMs}ms`,
-            '--laser-travel-x': `${beam.travelX}px`,
-            '--laser-travel-y': `${beam.travelY}px`,
-            '--laser-rotation': `${beam.rotationDeg}deg`,
-            '--laser-intensity': `${beam.intensity}`
-          }"
-        />
       </div>
 
       <div class="progress-panel">
@@ -1181,6 +1193,11 @@ onUnmounted(() => {
   animation: stars-drift-2 52s linear infinite;
 }
 
+.n-back-screen.stars-paused::before,
+.n-back-screen.stars-paused::after {
+  animation-play-state: paused;
+}
+
 .n-back-screen > * {
   position: relative;
   z-index: 1;
@@ -1237,12 +1254,14 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   gap: 16px;
+  color: #cbd5e1;
 }
 
 .setup-title {
   font-size: 34px;
   font-weight: 700;
   text-align: center;
+  color: #cbd5e1;
 }
 
 .setup-overview {
@@ -1327,6 +1346,7 @@ onUnmounted(() => {
 .task-title {
   font-size: 24px;
   font-weight: 700;
+  color: #cbd5e1;
 }
 
 .square-grid-wrap {
@@ -1434,6 +1454,7 @@ onUnmounted(() => {
 .reflection-question {
   font-size: 26px;
   font-weight: 700;
+  color: #cbd5e1;
 }
 
 .reflection-scale-row {
@@ -1493,13 +1514,15 @@ onUnmounted(() => {
   z-index: 1;
   pointer-events: none;
   overflow: hidden;
+  contain: layout paint;
 }
 
 .distraction-dot {
   position: absolute;
   border-radius: 999px;
   background: var(--stimulus-color);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.35);
+  will-change: transform, opacity;
   animation:
     drift var(--dot-duration) ease-in-out infinite,
     dot-flicker var(--dot-flicker-duration) steps(5, end) infinite;
@@ -1509,21 +1532,12 @@ onUnmounted(() => {
 .meteorite {
   position: absolute;
   border-radius: 999px;
-  background:
-    radial-gradient(
-      circle at 32% 28%,
-      rgba(255, 248, 227, 0.9),
-      rgba(217, 178, 124, 0.78) 34%,
-      rgba(128, 92, 60, 0.95) 72%,
-      rgba(74, 50, 35, 1) 100%
-    ),
-    radial-gradient(circle at 76% 66%, rgba(51, 34, 21, 0.45), rgba(24, 15, 10, 0.8));
-  box-shadow:
-    0 0 12px rgba(245, 158, 11, calc(0.3 * var(--meteor-intensity))),
-    0 0 28px rgba(168, 85, 247, calc(0.2 * var(--meteor-intensity)));
+  background: radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.94) 36%, rgba(203, 213, 225, 0.88) 72%, rgba(148, 163, 184, 0.92) 100%);
+  box-shadow: 0 0 16px rgba(255, 255, 255, calc(0.45 * var(--meteor-intensity)));
   opacity: 0;
   mix-blend-mode: normal;
   transform-origin: center;
+  will-change: transform, opacity;
   animation: meteorite-fly var(--meteor-duration) linear infinite;
   animation-delay: var(--meteor-delay);
   overflow: visible;
@@ -1535,50 +1549,36 @@ onUnmounted(() => {
   inset: 0;
   border-radius: inherit;
   background:
-    radial-gradient(circle at 24% 30%, rgba(46, 26, 14, 0.7) 0 13%, transparent 15%),
-    radial-gradient(circle at 58% 34%, rgba(41, 23, 11, 0.62) 0 11%, transparent 13%),
-    radial-gradient(circle at 72% 58%, rgba(41, 23, 11, 0.64) 0 15%, transparent 17%),
-    radial-gradient(circle at 38% 72%, rgba(36, 21, 10, 0.62) 0 12%, transparent 14%),
-    radial-gradient(circle at 50% 52%, rgba(64, 40, 22, 0.42) 0 7%, transparent 10%);
-  filter: saturate(0.85) contrast(1.05);
+    radial-gradient(circle at 30% 34%, rgba(100, 116, 139, 0.45) 0 12%, transparent 14%),
+    radial-gradient(circle at 64% 60%, rgba(71, 85, 105, 0.42) 0 14%, transparent 17%);
 }
 
 .meteorite::after {
   content: '';
   position: absolute;
   top: 50%;
-  right: calc(42% + (var(--meteor-size) * 0.15));
+  left: 50%;
   width: calc(var(--meteor-size) * 2.9);
   height: calc(var(--meteor-size) * 0.26);
-  transform: translateY(-50%);
-  transform-origin: right center;
+  /* Rotate around the meteor centre so the trail always points away from travel direction. */
+  transform-origin: left center;
+  transform: translateY(-50%) rotate(var(--meteor-trail-angle));
   border-radius: 999px;
   background: linear-gradient(
     90deg,
-    rgba(251, 191, 36, 0),
-    rgba(248, 113, 113, calc(0.35 * var(--meteor-intensity))),
-    rgba(255, 237, 213, calc(0.72 * var(--meteor-intensity)))
-  );
-  filter: blur(0.8px);
-}
-
-.laser-beam {
-  position: absolute;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0),
-    rgba(255, 255, 255, calc(0.7 * var(--laser-intensity))),
-    rgba(255, 255, 255, calc(0.96 * var(--laser-intensity))),
-    rgba(255, 255, 255, calc(0.7 * var(--laser-intensity))),
+    rgba(255, 255, 255, calc(0.78 * var(--meteor-intensity))),
+    rgba(191, 219, 254, calc(0.32 * var(--meteor-intensity))),
     rgba(255, 255, 255, 0)
   );
-  box-shadow: 0 0 8px rgba(255, 255, 255, calc(0.55 * var(--laser-intensity)));
-  opacity: 0;
-  mix-blend-mode: screen;
-  transform-origin: center;
-  animation: laser-sweep var(--laser-duration) linear infinite;
-  animation-delay: var(--laser-delay);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .distraction-dot,
+  .meteorite {
+    animation: none;
+    opacity: 0.22;
+    transform: none;
+  }
 }
 
 @keyframes drift {
@@ -1615,40 +1615,21 @@ onUnmounted(() => {
     opacity: 0;
     transform: translate3d(0, 0, 0) scale(0.85) rotate(var(--meteor-rotation));
   }
-  6% {
+  8% {
     opacity: calc(0.9 * var(--meteor-intensity));
   }
-  14% {
+  18% {
     opacity: calc(1 * var(--meteor-intensity));
   }
-  70% {
+  78% {
     opacity: calc(0.2 * var(--meteor-intensity));
     transform: translate3d(var(--meteor-travel-x), var(--meteor-travel-y), 0) scale(1.12)
       rotate(var(--meteor-rotation));
   }
-  88% {
+  92% {
     opacity: 0;
     transform: translate3d(var(--meteor-travel-x), var(--meteor-travel-y), 0) scale(1.18)
       rotate(var(--meteor-rotation));
-  }
-}
-
-@keyframes laser-sweep {
-  0%,
-  100% {
-    opacity: 0;
-    transform: translate3d(0, 0, 0) rotate(var(--laser-rotation));
-  }
-  8% {
-    opacity: calc(0.3 * var(--laser-intensity));
-  }
-  15% {
-    opacity: calc(0.95 * var(--laser-intensity));
-  }
-  62% {
-    opacity: calc(0.32 * var(--laser-intensity));
-    transform: translate3d(var(--laser-travel-x), var(--laser-travel-y), 0)
-      rotate(var(--laser-rotation));
   }
 }
 

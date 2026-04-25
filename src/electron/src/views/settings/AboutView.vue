@@ -25,9 +25,9 @@ onMounted(async () => {
     </div>
     <div v-else class="mt-4">
       <article class="prose prose-lg mt-4 dark:prose-invert">
-        <h1 class="relative">
+        <h1 class="flex items-center gap-2 flex-wrap">
           <span class="primary-blue">{{ studyInfo.studyName }}</span>
-          <span class="badge badge-neutral absolute top-0">v{{ studyInfo.appVersion }}</span>
+          <span class="badge badge-neutral">v{{ studyInfo.appVersion }}</span>
         </h1>
       </article>
 
